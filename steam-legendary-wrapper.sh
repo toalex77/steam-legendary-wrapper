@@ -13,14 +13,30 @@ if [ -f "${STEAM_LIBRARY_FOLDER_FILE}" ]; then
   done <<< "$(sed -ne "s/.*\"[[:digit:]]\+\"[[:space:]]\+\"\\([^\"\]\+\)\".*/\1/p" "${STEAM_LIBRARY_FOLDER_FILE}")"
 fi
 
-legendary_bin="$(which legendary)"
+python3_bin="$(which python3)"
+if [ ! -f  "${python3_bin}" ]; then
+  echo "Python 3 executable not found."
+  exit
+fi
+
+legendary_bin="/opt/Heroic/resources/app.asar.unpacked/build/bin/linux/legendary"
+
+if [ ! -f  "${legendary_bin}" ]; then
+  legendary_bin="$(which legendary)"
+fi
+
 if [ ! -f  "${legendary_bin}" ]; then
   echo "Legendary executable not found."
   exit
 fi
 
+if [ "$( file "${legendary_bin}" | grep -c "ELF" )" -eq 0 ]; then
+   echo "Legendary executable is a python script and it cannot run inside Steam Linux Runtime Environment."
+   echo "Download a binary executable versione from https://github.com/derrod/legendary/releases and put it in your PATH."
+   exit
+fi
+
 export LC_ALL=en_US.UTF-8
-export PRESSURE_VESSEL_FILESYSTEMS_RO="${legendary_bin}"
 
 if [ $# -ge 1 ]; then
   GAME_NAME="$1"
@@ -63,8 +79,10 @@ if [ $# -ge 1 ]; then
     echo "Steam Linux Runtime \"${STEAM_LINUX_RUNTIME}\" not found."
     exit
   fi
+  PYTHONPATH="$( $python3_bin -c "import sys;print(':'.join(map(str, list(filter(None, sys.path)))))" )"
+  PYTHONHOME="$( dirname "$(echo -n "${python3_bin}")" )"
 
-  LEGENDARY_LINE="$(${legendary_bin} list-installed --show-dirs --tsv | grep "${GAME_NAME}" | tr -d '\n\r')"
+  LEGENDARY_LINE="$(PYTHONHOME="${PYTHONHOME}" PYTHONPATH="${PYTHONPATH}" ${legendary_bin} list-installed --show-dirs --tsv | grep "${GAME_NAME}" | tr -d '\n\r')"
   
   if [ "${LEGENDARY_LINE}" != "" ]; then
     EPIC_GAME_NAME="$(echo -n "${LEGENDARY_LINE}" | cut -f 1)"
@@ -79,14 +97,20 @@ if [ $# -ge 1 ]; then
     #export DXVK_HUD="fps,scale=0.75"
     export STEAM_COMPAT_CLIENT_INSTALL_PATH=${HOME}/.steam/steam
     export STEAM_COMPAT_DATA_PATH="${PREFIX_BASEDIR}/${GAME_DIRNAME}"
-    export PYTHONHOME=/usr
-    export PYTHONPATH=/usr/lib64/python3.8/lib-dynload:/usr/lib64/python3.8
     export WINEDLLPATH="${PROTON_BASEDIR}/files/lib64/wine:${PROTON_BASEDIR}/files/lib/wine"
 
     if [ ! -d "${STEAM_COMPAT_DATA_PATH}" ]; then
       mkdir -p "${STEAM_COMPAT_DATA_PATH}"
     fi
 
-    ${steamLinuxRuntime_bin} -- ${legendary_bin} launch "${EPIC_GAME_NAME}" --language it --no-wine --wrapper "'${PROTON_BASEDIR}/proton' waitforexitandrun"
+    host_prefix=""
+    HOST_LD_LIBRARY_PATH=""
+    if [[ "${legendary_bin}" =~ ^/(usr)/.* ]]; then
+      legendary_bin="/run/host${legendary_bin}"
+    else
+      export PRESSURE_VESSEL_FILESYSTEMS_RO="${legendary_bin}"
+    fi
+    
+    ${steamLinuxRuntime_bin} -- sh -c 'PYTHONHOME="$( dirname "$(echo -n "$( which python3 )" )" )" PYTHONPATH="$( python3 -c "import sys;print('\'':'\''.join(map(str, list(filter(None, sys.path)))))" )" '"${legendary_bin} launch \"${EPIC_GAME_NAME}\" --language it --no-wine --wrapper \"'${PROTON_BASEDIR}/proton' waitforexitandrun\""
   fi
 fi
