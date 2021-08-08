@@ -1,6 +1,19 @@
 #!/bin/bash
 
 declare -a STEAM_LIBRARY_FOLDERS
+legendary_config="${HOME}/.config/legendary/config.ini"
+
+if [ ! -f "${legendary_config}" -o "$( grep -c locale "${legendary_config}" locale 2> /dev/null )" == "0" ]; then
+  if [ "${LC_IDENTIFICATION}" != "" ]; then
+    language="--language ${LC_IDENTIFICATION:0:2}"
+  elif [ "${LANG}" != "" ]; then
+    language="--language ${LANG:0:2}"
+  elif [ "${LC_ALL}" != "" ]; then
+    language="--language ${LC_ALL:0:2}"
+  elif [ "${LC_CTYPE}" != "" ]; then
+    language="--language ${LC_CTYPE:0:2}"
+  fi
+fi
 
 STEAM_ROOT="${HOME}/.steam/root"
 STEAM_LIBRARY_FOLDERS=( "${STEAM_ROOT}/steamapps" )
@@ -35,8 +48,6 @@ if [ "$( file "${legendary_bin}" | grep -c "ELF" )" -eq 0 ]; then
    echo "Download a binary executable version from https://github.com/derrod/legendary/releases and put it in your PATH."
    exit
 fi
-
-export LC_ALL=en_US.UTF-8
 
 if [ $# -ge 1 ]; then
   GAME_NAME="$1"
@@ -82,7 +93,7 @@ if [ $# -ge 1 ]; then
   PYTHONPATH="$( $python3_bin -c "import sys;print(':'.join(map(str, list(filter(None, sys.path)))))" )"
   PYTHONHOME="$( dirname "$(echo -n "${python3_bin}")" )"
 
-  LEGENDARY_LINE="$(PYTHONHOME="${PYTHONHOME}" PYTHONPATH="${PYTHONPATH}" ${legendary_bin} list-installed --show-dirs --tsv | grep "${GAME_NAME}" | tr -d '\n\r')"
+  LEGENDARY_LINE="$(PYTHONHOME="${PYTHONHOME}" PYTHONPATH="${PYTHONPATH}" LC_ALL=C.UTF-8 ${legendary_bin} list-installed --show-dirs --tsv | grep "${GAME_NAME}" | tr -d '\n\r')"
   
   if [ "${LEGENDARY_LINE}" != "" ]; then
     EPIC_GAME_NAME="$(echo -n "${LEGENDARY_LINE}" | cut -f 1)"
@@ -111,6 +122,6 @@ if [ $# -ge 1 ]; then
       export PRESSURE_VESSEL_FILESYSTEMS_RO="${legendary_bin}"
     fi
     
-    ${steamLinuxRuntime_bin} -- sh -c 'PYTHONHOME="$( dirname "$(echo -n "$( which python3 )" )" )" PYTHONPATH="$( python3 -c "import sys;print('\'':'\''.join(map(str, list(filter(None, sys.path)))))" )" '"${legendary_bin} launch \"${EPIC_GAME_NAME}\" --language it --no-wine --wrapper \"'${PROTON_BASEDIR}/proton' waitforexitandrun\""
+    ${steamLinuxRuntime_bin} -- sh -c 'PYTHONHOME="$( dirname "$(echo -n "$( which python3 )" )" )" PYTHONPATH="$( python3 -c "import sys;print('\'':'\''.join(map(str, list(filter(None, sys.path)))))" )" '"${legendary_bin} launch \"${EPIC_GAME_NAME}\" ${language} --no-wine --wrapper \"'${PROTON_BASEDIR}/proton' waitforexitandrun\""
   fi
 fi
