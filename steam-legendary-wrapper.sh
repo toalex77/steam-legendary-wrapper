@@ -114,8 +114,6 @@ if [ $# -ge 1 ]; then
       mkdir -p "${STEAM_COMPAT_DATA_PATH}"
     fi
 
-    host_prefix=""
-    HOST_LD_LIBRARY_PATH=""
     if [[ "${legendary_bin}" =~ ^/(usr)/.* ]]; then
       legendary_bin="/run/host${legendary_bin}"
     else
