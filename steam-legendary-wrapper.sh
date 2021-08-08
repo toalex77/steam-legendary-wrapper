@@ -32,7 +32,7 @@ fi
 
 if [ "$( file "${legendary_bin}" | grep -c "ELF" )" -eq 0 ]; then
    echo "Legendary executable is a python script and it cannot run inside Steam Linux Runtime Environment."
-   echo "Download a binary executable versione from https://github.com/derrod/legendary/releases and put it in your PATH."
+   echo "Download a binary executable version from https://github.com/derrod/legendary/releases and put it in your PATH."
    exit
 fi
 
