@@ -119,7 +119,43 @@ if [ $# -ge 1 ]; then
     else
       export PRESSURE_VESSEL_FILESYSTEMS_RO="${legendary_bin}"
     fi
-    
+    resume=0
+    case "${XDG_SESSION_DESKTOP}" in
+      KDE)
+        if [ "$(qdbus org.kde.KWin /Compositor org.kde.kwin.Compositing.active)" == "true" ]; then
+          resume=1
+          qdbus org.kde.KWin /Compositor suspend
+        fi
+        ;;
+      GNOME)
+        if [ "$(gsettings get org.gnome.desktop.interface enable-animations)" == "true" ]; then
+          resume=1
+          gsettings set org.gnome.desktop.interface enable-animations false
+        fi
+        ;;
+      *)
+        ;;
+    esac
+    monitor_sh="$(which monitor.sh 2>/dev/null)"
+    if [ -n "${monitor_sh}" ]; then
+      # Change this to dim all monitors except the Primary
+      ~/bin/monitor.sh -b 0.1 -m DP-1
+    fi
     ${steamLinuxRuntime_bin} -- sh -c 'PYTHONHOME="$( dirname "$(echo -n "$( which python3 )" )" )" PYTHONPATH="$( python3 -c "import sys;print('\'':'\''.join(map(str, list(filter(None, sys.path)))))" )" '"${legendary_bin} launch \"${EPIC_GAME_NAME}\" ${language} --no-wine --wrapper \"'${PROTON_BASEDIR}/proton' waitforexitandrun\""
+    if [ -n "${monitor_sh}" ]; then
+      ~/bin/monitor.sh
+    fi
+    if [ $resume -eq 1 ]; then
+      case "${XDG_SESSION_DESKTOP}" in
+        KDE)
+          qdbus org.kde.KWin /Compositor resume
+        ;;
+        GNOME)
+          gsettings set org.gnome.desktop.interface enable-animations true
+        ;;
+        *)
+        ;;
+      esac
+    fi
   fi
 fi
