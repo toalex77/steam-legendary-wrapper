@@ -136,20 +136,13 @@ if [ $# -ge 1 ]; then
       *)
         ;;
     esac
-    monitor_sh="$(which monitor.sh 2>/dev/null)"
+    monitor_sh="$(which monitor 2>/dev/null)"
     if [ -n "${monitor_sh}" ]; then
-      monitor_list="$(${monitor_sh} -l)"
-      primary="$(xrandr --current | grep "connected primary" | cut -d " " -f 1)"
-      others="$(printf '%s\n' "${monitor_list//$primary/}")"
-      array=( $others )
-      list="$(echo ${array[@]}| tr " " ",")"
-      if [ -n "${list}" ]; then
-        ${monitor_sh} -b 0.1 -m "${list}"
-      fi
+        ${monitor_sh} -p -b 0.1"
     fi
     ${steamLinuxRuntime_bin} -- sh -c 'PYTHONHOME="$( dirname "$(echo -n "$( which python3 )" )" )" PYTHONPATH="$( python3 -c "import sys;print('\'':'\''.join(map(str, list(filter(None, sys.path)))))" )" '"${legendary_bin} launch \"${EPIC_GAME_NAME}\" ${language} --no-wine --wrapper \"'${PROTON_BASEDIR}/proton' waitforexitandrun\""
     if [ -n "${monitor_sh}" ]; then
-      ${monitor_sh}
+      ${monitor_sh} on
     fi
     if [ $resume -eq 1 ]; then
       case "${XDG_SESSION_DESKTOP}" in
