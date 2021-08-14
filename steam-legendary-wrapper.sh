@@ -1,6 +1,20 @@
 #!/bin/bash
+failure() {
+  local lineno=$1
+  local msg=$2
+  echo "Failed at $lineno: $msg"
+}
+if [ "${DEBUG}" == "1" ]; then
+  set -eE -o functrace
+  trap 'failure ${LINENO} "$BASH_COMMAND"' ERR
+fi
 
 declare -a STEAM_LIBRARY_FOLDERS
+PROTON_RUN="waitforexitandrun"
+GAME_NAME=""
+GAME_PARAMS=""
+COMPAT_TOOL=0
+
 legendary_config="${HOME}/.config/legendary/config.ini"
 
 if [ ! -f "${legendary_config}" -o "$( grep -c locale "${legendary_config}" locale 2> /dev/null )" == "0" ]; then
@@ -15,22 +29,13 @@ if [ ! -f "${legendary_config}" -o "$( grep -c locale "${legendary_config}" loca
   fi
 fi
 
-STEAM_ROOT="${HOME}/.steam/root"
-STEAM_LIBRARY_FOLDERS=( "${STEAM_ROOT}/steamapps" )
-STEAM_LIBRARY_FOLDER_FILE="${STEAM_ROOT}/steamapps/libraryfolders.vdf"
-PROTON_CUSTOM_BASEDIR="${STEAM_ROOT}/compatibilitytools.d"
-
-if [ -f "${STEAM_LIBRARY_FOLDER_FILE}" ]; then
-  while read folder; do
-    STEAM_LIBRARY_FOLDERS+=( "${folder}/steamapps" )
-  done <<< "$(sed -ne "s/.*\"[[:digit:]]\+\"[[:space:]]\+\"\\([^\"\]\+\)\".*/\1/p" "${STEAM_LIBRARY_FOLDER_FILE}")"
-fi
-
 python3_bin="$(which python3)"
 if [ ! -f  "${python3_bin}" ]; then
   echo "Python 3 executable not found."
   exit
 fi
+PYTHONPATH="$( $python3_bin -c "import sys;print(':'.join(map(str, list(filter(None, sys.path)))))" )"
+PYTHONHOME="$( dirname "$(echo -n "${python3_bin}")" )"
 
 legendary_bin="/opt/Heroic/resources/app.asar.unpacked/build/bin/linux/legendary"
 
@@ -43,23 +48,99 @@ if [ ! -f  "${legendary_bin}" ]; then
   exit
 fi
 
-if [ "$( file "${legendary_bin}" | grep -c "ELF" )" -eq 0 ]; then
+if [ "$( ldd "${legendary_bin}" 2>&1 | grep -c "not a dynamic executable" )" -ne 0 ]; then
    echo "Legendary executable is a python script and it cannot run inside Steam Linux Runtime Environment."
    echo "Download a binary executable version from https://github.com/derrod/legendary/releases and put it in your PATH."
    exit
 fi
 
-if [ $# -ge 1 ]; then
-  GAME_NAME="$1"
+# TODO: Manage GAME_PARAMS when not run as a compatility tool
+if [ -n "$1" -a -n "$2" ]; then
+  if [ "$1" == "compatrun" -o "$1" == "compatwaitforexitandrun" ]; then
+    PROTON_RUN="${1#*compat}"
+    APPDIR="$(dirname "${2}")"
+    shift 2
+    GAME_PARAMS=()
+    for p in "$@" ; do
+      if [[ $p =~ ^PROTON_VER=.* ]]; then
+        PROTON_VER="${p#"PROTON_VER="}"
+      elif [[ $p =~ ^STEAM_LINUX_RUNTIME=.* ]]; then
+        STEAM_LINUX_RUNTIME="${p#"STEAM_LINUX_RUNTIME="}"
+      else
+        GAME_PARAMS+=( "$p" )
+      fi
+    done
+    LEGENDARY_LINE="$(PYTHONHOME="${PYTHONHOME}" PYTHONPATH="${PYTHONPATH}" LC_ALL=C.UTF-8 ${legendary_bin} list-installed --show-dirs --csv | cut -d "," -f 1,7 | grep "${APPDIR}" | tr -d '\n\r')"
+    GAME_NAME="$(echo -n "${LEGENDARY_LINE}" | cut -d "," -f 1)"
+    COMPAT_TOOL=1
+  fi
+fi
 
-  if [ $# -ge 2 ]; then
-    PROTON_VER="$2"
+if [ -n "${STEAM_COMPAT_CLIENT_INSTALL_PATH}" ]; then
+  STEAM_ROOT="$(readlink -f "${STEAM_COMPAT_CLIENT_INSTALL_PATH}" )"
+else
+  if [ -e "${HOME}/.steam/root" ]; then
+    STEAM_ROOT="$(readlink "${HOME}/.steam/root" )"
+  elif [ -e "${HOME}/.local/share/Steam" ]; then
+    STEAM_ROOT="${HOME}/.local/share/Steam"
   else
+    echo "Error: Unable to locale Steam root path."
+    exit
+  fi
+fi
+
+STEAM_LIBRARY_FOLDERS=( "${STEAM_ROOT}/steamapps" )
+STEAM_LIBRARY_FOLDER_FILE="${STEAM_ROOT}/steamapps/libraryfolders.vdf"
+
+# Manage correctly compatibility tools paths: https://github.com/ValveSoftware/steam-for-linux/issues/6310
+PROTON_CUSTOM_BASEDIR=()
+PROTON_STANDARD_PATHS=( "${STEAM_ROOT}/compatibilitytools.d" "/usr/share/steam/compatibilitytools.d" "/usr/local/share/steam/compatibilitytools.d" )
+for proton_folder in ${PROTON_STANDARD_PATHS[@]}; do
+  if [ -d "${proton_folder}" ]; then
+    PROTON_CUSTOM_BASEDIR+=( "$proton_folder" )
+  fi
+done
+if [ -n "${STEAM_EXTRA_COMPAT_TOOLS_PATHS}" ]; then
+  while IFS=":" read -ra folder_array; do
+    for folder in ${folder_array[@]}; do
+      if [ -d "$folder" ]; then
+        PROTON_CUSTOM_BASEDIR+=( "$folder" )
+      fi
+    done
+  done <<< "$(echo -n "${STEAM_EXTRA_COMPAT_TOOLS_PATHS}")" 
+fi
+
+if [ -f "${STEAM_LIBRARY_FOLDER_FILE}" ]; then
+  while read folder; do
+    STEAM_LIBRARY_FOLDERS+=( "${folder}/steamapps" )
+  done <<< "$(sed -ne "s/.*\"[[:digit:]]\+\"[[:space:]]\+\"\\([^\"\]\+\)\".*/\1/p" "${STEAM_LIBRARY_FOLDER_FILE}")"
+fi
+
+if [ $COMPAT_TOOL -eq 0 ]; then
+  if [ -z "${GAME_NAME}" -a $# -ge 1 ]; then
+    GAME_NAME="$1"
+  fi
+  if [ -z "${PROTON_VER}" -a $# -ge 2 ]; then
+    PROTON_VER="$2"
+  fi
+  if [ -z "${STEAM_LINUX_RUNTIME}" -a $# -ge 3 ]; then
+    STEAM_LINUX_RUNTIME="$3"
+  fi
+fi
+
+
+if [ -n "${GAME_NAME}" ]; then
+
+  if [ -z "${PROTON_VER}" ]; then
     PROTON_VER="Proton-6.14-GE-2"
   fi
 
-  PROTON_ACF="$(grep -l "\"${PROTON_VER}\"" $( printf '%s/*.acf ' "${STEAM_LIBRARY_FOLDERS[@]}" ) )"
-  if [ -f "${PROTON_ACF[@]}" ]; then
+  if [ -z "${STEAM_LINUX_RUNTIME}" ]; then
+    STEAM_LINUX_RUNTIME="Steam Linux Runtime - Soldier"
+  fi
+
+  PROTON_ACF="$(grep -l "\"${PROTON_VER}\"" $( printf '%s/*.acf ' ${STEAM_LIBRARY_FOLDERS[@]} ) )"
+  if [ -n "${PROTON_ACF[@]}" -a -f "${PROTON_ACF[@]}" ]; then
     PROTON_DIR="$( dirname "$(echo -n "${PROTON_ACF}")" )"
     PROTON_INSTALLDIR="$(sed -ne "s/.*\"installdir\"[[:space:]]\+\"\\([^\"\]\+\)\".*/\1/p" "${PROTON_ACF}")"
     PROTON_BASEDIR="${PROTON_DIR}/common/${PROTON_INSTALLDIR}"
@@ -75,12 +156,6 @@ if [ $# -ge 1 ]; then
     exit
   fi
 
-  if [ $# -ge 3 ]; then
-    STEAM_LINUX_RUNTIME="$3"
-  else
-    STEAM_LINUX_RUNTIME="Steam Linux Runtime - Soldier"
-  fi
-
   STEAM_LINUX_RUNTIME_ACF="$(grep -l "\"name\"[[:space:]]\+\"${STEAM_LINUX_RUNTIME}\"" $( printf '%s/*.acf ' "${STEAM_LIBRARY_FOLDERS[@]}" ) )"
   STEAM_LINUX_RUNTIME_BASEDIR="$( dirname "$(echo -n "${STEAM_LINUX_RUNTIME_ACF}")" )"
   STEAM_LINUX_RUNTIME_INSTALLDIR="$(sed -ne "s/.*\"installdir\"[[:space:]]\+\"\\([^\"\]\+\)\".*/\1/p" "${STEAM_LINUX_RUNTIME_ACF}")"
@@ -90,8 +165,6 @@ if [ $# -ge 1 ]; then
     echo "Steam Linux Runtime \"${STEAM_LINUX_RUNTIME}\" not found."
     exit
   fi
-  PYTHONPATH="$( $python3_bin -c "import sys;print(':'.join(map(str, list(filter(None, sys.path)))))" )"
-  PYTHONHOME="$( dirname "$(echo -n "${python3_bin}")" )"
 
   LEGENDARY_LINE="$(PYTHONHOME="${PYTHONHOME}" PYTHONPATH="${PYTHONPATH}" LC_ALL=C.UTF-8 ${legendary_bin} list-installed --show-dirs --tsv | grep "${GAME_NAME}" | tr -d '\n\r')"
   
@@ -106,7 +179,9 @@ if [ $# -ge 1 ]; then
 
     export DXVK_FRAME_RATE="0"
     #export DXVK_HUD="fps,scale=0.75"
-    export STEAM_COMPAT_CLIENT_INSTALL_PATH=${HOME}/.steam/steam
+    if [ -z "${STEAM_COMPAT_CLIENT_INSTALL_PATH}" ]; then
+      export STEAM_COMPAT_CLIENT_INSTALL_PATH=${HOME}/.steam/steam
+    fi
     export STEAM_COMPAT_DATA_PATH="${PREFIX_BASEDIR}/${GAME_DIRNAME}"
     export WINEDLLPATH="${PROTON_BASEDIR}/files/lib64/wine:${PROTON_BASEDIR}/files/lib/wine"
 
@@ -140,7 +215,8 @@ if [ $# -ge 1 ]; then
     if [ -n "${monitor_sh}" ]; then
         ${monitor_sh} -p -b 0.1
     fi
-    ${steamLinuxRuntime_bin} -- sh -c 'PYTHONHOME="$( dirname "$(echo -n "$( which python3 )" )" )" PYTHONPATH="$( python3 -c "import sys;print('\'':'\''.join(map(str, list(filter(None, sys.path)))))" )" '"${legendary_bin} launch \"${EPIC_GAME_NAME}\" ${language} --no-wine --wrapper \"'${PROTON_BASEDIR}/proton' waitforexitandrun\""
+    # TODO: Manage GAME_PARAMS
+    ${steamLinuxRuntime_bin} -- sh -c 'PYTHONHOME="$( dirname "$(echo -n "$( which python3 )" )" )" PYTHONPATH="$( python3 -c "import sys;print('\'':'\''.join(map(str, list(filter(None, sys.path)))))" )" '"${legendary_bin} launch \"${EPIC_GAME_NAME}\" ${language} --no-wine --wrapper \"'${PROTON_BASEDIR}/proton' ${PROTON_RUN}\""
     if [ -n "${monitor_sh}" ]; then
       ${monitor_sh} on
     fi
