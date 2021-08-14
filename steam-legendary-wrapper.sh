@@ -95,14 +95,14 @@ STEAM_LIBRARY_FOLDER_FILE="${STEAM_ROOT}/steamapps/libraryfolders.vdf"
 # Manage correctly compatibility tools paths: https://github.com/ValveSoftware/steam-for-linux/issues/6310
 PROTON_CUSTOM_BASEDIR=()
 PROTON_STANDARD_PATHS=( "${STEAM_ROOT}/compatibilitytools.d" "/usr/share/steam/compatibilitytools.d" "/usr/local/share/steam/compatibilitytools.d" )
-for proton_folder in ${PROTON_STANDARD_PATHS[@]}; do
+for proton_folder in "${PROTON_STANDARD_PATHS[@]}"; do
   if [ -d "${proton_folder}" ]; then
     PROTON_CUSTOM_BASEDIR+=( "$proton_folder" )
   fi
 done
 if [ -n "${STEAM_EXTRA_COMPAT_TOOLS_PATHS}" ]; then
   while IFS=":" read -ra folder_array; do
-    for folder in ${folder_array[@]}; do
+    for folder in "${folder_array[@]}"; do
       if [ -d "$folder" ]; then
         PROTON_CUSTOM_BASEDIR+=( "$folder" )
       fi
@@ -111,7 +111,7 @@ if [ -n "${STEAM_EXTRA_COMPAT_TOOLS_PATHS}" ]; then
 fi
 
 if [ -f "${STEAM_LIBRARY_FOLDER_FILE}" ]; then
-  while read folder; do
+  while read -r folder; do
     STEAM_LIBRARY_FOLDERS+=( "${folder}/steamapps" )
   done <<< "$(sed -ne "s/.*\"[[:digit:]]\+\"[[:space:]]\+\"\\([^\"\]\+\)\".*/\1/p" "${STEAM_LIBRARY_FOLDER_FILE}")"
 fi
@@ -139,16 +139,19 @@ if [ -n "${GAME_NAME}" ]; then
     STEAM_LINUX_RUNTIME="Steam Linux Runtime - Soldier"
   fi
 
-  PROTON_ACF="$(grep -l "\"${PROTON_VER}\"" $( printf '%s/*.acf ' ${STEAM_LIBRARY_FOLDERS[@]} ) )"
-  if [ -n "${PROTON_ACF[@]}" -a -f "${PROTON_ACF[@]}" ]; then
+  PROTON_ACF="$(grep -l "\"${PROTON_VER}\"" $( printf '%s/*.acf ' "${STEAM_LIBRARY_FOLDERS[@]}" ) )"
+  if [ -n "${PROTON_ACF}" -a -f "${PROTON_ACF}" ]; then
     PROTON_DIR="$( dirname "$(echo -n "${PROTON_ACF}")" )"
     PROTON_INSTALLDIR="$(sed -ne "s/.*\"installdir\"[[:space:]]\+\"\\([^\"\]\+\)\".*/\1/p" "${PROTON_ACF}")"
     PROTON_BASEDIR="${PROTON_DIR}/common/${PROTON_INSTALLDIR}"
-  else   
-    PROTON_CUSTOM_VDF="$(grep -l "\"${PROTON_VER}\"" ${PROTON_CUSTOM_BASEDIR}/*/compatibilitytool.vdf)"
-    if [ -f "${PROTON_CUSTOM_VDF}" ]; then
-      PROTON_BASEDIR="$( dirname "$(echo -n "${PROTON_CUSTOM_VDF}")" )"
-    fi
+  else
+    for folder in "${PROTON_CUSTOM_BASEDIR[@]}"; do
+      PROTON_CUSTOM_VDF="$(grep -l "\"${PROTON_VER}\"" "${folder}"/*/compatibilitytool.vdf)"
+      if [ -f "${PROTON_CUSTOM_VDF}" ]; then
+        PROTON_BASEDIR="$( dirname "$(echo -n "${PROTON_CUSTOM_VDF}")" )"
+        break
+      fi
+    done
   fi
 
   if [ ! -d "${PROTON_BASEDIR}" ]; then
