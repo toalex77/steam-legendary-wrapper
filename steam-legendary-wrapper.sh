@@ -1,9 +1,17 @@
 #!/bin/bash
-
+failure() {
+  local lineno=$1
+  local msg=$2
+  echo "Failed at $lineno: $msg"
+}
+if [ "${DEBUG}" == "1" ]; then
+  set -eE -o functrace
+  trap 'failure ${LINENO} "$BASH_COMMAND"' ERR
+fi
 declare -a STEAM_LIBRARY_FOLDERS
 legendary_config="${HOME}/.config/legendary/config.ini"
 
-if [ ! -f "${legendary_config}" -o "$( grep -c locale "${legendary_config}" locale 2> /dev/null )" == "0" ]; then
+if [ ! -f "${legendary_config}" -o "$( grep -c locale "${legendary_config}" locale 2> /dev/null )" == "0" ]; then # "fix Kate Syntax Highlight
   if [ "${LC_IDENTIFICATION}" != "" ]; then
     language="--language ${LC_IDENTIFICATION:0:2}"
   elif [ "${LANG}" != "" ]; then
@@ -15,14 +23,44 @@ if [ ! -f "${legendary_config}" -o "$( grep -c locale "${legendary_config}" loca
   fi
 fi
 
-STEAM_ROOT="${HOME}/.steam/root"
+if [ -e "${HOME}/.steam/root" ]; then
+  STEAM_ROOT="$(readlink "${HOME}/.steam/root" )"
+elif [ -e "${HOME}/.local/share/Steam" ]; then
+  STEAM_ROOT="${HOME}/.local/share/Steam"
+else
+  echo "Error: Unable to locale Steam root path."
+  exit
+fi
 STEAM_LIBRARY_FOLDERS=( "${STEAM_ROOT}/steamapps" )
 STEAM_LIBRARY_FOLDER_FILE="${STEAM_ROOT}/steamapps/libraryfolders.vdf"
-PROTON_CUSTOM_BASEDIR="${STEAM_ROOT}/compatibilitytools.d"
+
+# Manage correctly compoatibility tools paths: https://github.com/ValveSoftware/steam-for-linux/issues/6310
+PROTON_CUSTOM_BASEDIR=()
+PROTON_STANDARD_PATHS=( "${STEAM_ROOT}/compatibilitytools.d" "/usr/share/steam/compatibilitytools.d" "/usr/local/share/steam/compatibilitytools.d" )
+for proton_folder in ${PROTON_STANDARD_PATHS[@]}; do
+  if [ -d "${proton_folder}" ]; then
+    PROTON_CUSTOM_BASEDIR+=( "$proton_folder" )
+  fi
+done
+if [ -n "${STEAM_EXTRA_COMPAT_TOOLS_PATHS}" ]; then
+  while IFS=":" read -ra folder_array; do
+    for folder in ${folder_array[@]}; do
+      if [ -d "$folder" ]; then
+        PROTON_CUSTOM_BASEDIR+=( "$folder" )
+      fi
+    done
+  done <<< "$(echo -n "${STEAM_EXTRA_COMPAT_TOOLS_PATHS}")" 
+fi
 
 if [ -f "${STEAM_LIBRARY_FOLDER_FILE}" ]; then
   while read folder; do
-    STEAM_LIBRARY_FOLDERS+=( "${folder}/steamapps" )
+    if [ -n "$folder" ]; then
+      if [ -e "$folder/steamapps" ]; then
+        if [[ ! " ${STEAM_LIBRARY_FOLDERS[@]} " =~ " ${folder}/steamapps " ]]; then
+          STEAM_LIBRARY_FOLDERS+=( "${folder}/steamapps" )
+        fi
+      fi
+    fi
   done <<< "$(sed -ne "s/.*\"[[:digit:]]\+\"[[:space:]]\+\"\\([^\"\]\+\)\".*/\1/p" "${STEAM_LIBRARY_FOLDER_FILE}")"
 fi
 
@@ -43,7 +81,7 @@ if [ ! -f  "${legendary_bin}" ]; then
   exit
 fi
 
-if [ "$( file "${legendary_bin}" | grep -c "ELF" )" -eq 0 ]; then
+if [ "$( ldd "${legendary_bin}" 2>&1 | grep -c "not a dynamic executable" )" -ne 0 ]; then
    echo "Legendary executable is a python script and it cannot run inside Steam Linux Runtime Environment."
    echo "Download a binary executable version from https://github.com/derrod/legendary/releases and put it in your PATH."
    exit
@@ -58,16 +96,19 @@ if [ $# -ge 1 ]; then
     PROTON_VER="Proton-6.14-GE-2"
   fi
 
-  PROTON_ACF="$(grep -l "\"${PROTON_VER}\"" $( printf '%s/*.acf ' "${STEAM_LIBRARY_FOLDERS[@]}" ) )"
-  if [ -f "${PROTON_ACF[@]}" ]; then
+  PROTON_ACF="$(grep -l "\"${PROTON_VER}\"" $( printf '%s/*.acf ' ${STEAM_LIBRARY_FOLDERS[@]} ) )"
+  if [ -n "${PROTON_ACF[@]}" -a -f "${PROTON_ACF[@]}" ]; then
     PROTON_DIR="$( dirname "$(echo -n "${PROTON_ACF}")" )"
     PROTON_INSTALLDIR="$(sed -ne "s/.*\"installdir\"[[:space:]]\+\"\\([^\"\]\+\)\".*/\1/p" "${PROTON_ACF}")"
     PROTON_BASEDIR="${PROTON_DIR}/common/${PROTON_INSTALLDIR}"
   else   
-    PROTON_CUSTOM_VDF="$(grep -l "\"${PROTON_VER}\"" ${PROTON_CUSTOM_BASEDIR}/*/compatibilitytool.vdf)"
-    if [ -f "${PROTON_CUSTOM_VDF}" ]; then
-      PROTON_BASEDIR="$( dirname "$(echo -n "${PROTON_CUSTOM_VDF}")" )"
-    fi
+    for proton_folder in ${PROTON_CUSTOM_BASEDIR[@]}; do
+      PROTON_CUSTOM_VDF="$(grep -l "\"${PROTON_VER}\"" ${proton_folder}/*/compatibilitytool.vdf)"
+      if [ -f "${PROTON_CUSTOM_VDF}" ]; then
+        PROTON_BASEDIR="$( dirname "$(echo -n "${PROTON_CUSTOM_VDF}")" )"
+        break
+      fi
+    done
   fi
 
   if [ ! -d "${PROTON_BASEDIR}" ]; then
@@ -136,7 +177,7 @@ if [ $# -ge 1 ]; then
       *)
         ;;
     esac
-    monitor_sh="$(which monitor 2>/dev/null)"
+    monitor_sh="$(which monitor.sh 2>/dev/null)"
     if [ -n "${monitor_sh}" ]; then
         ${monitor_sh} -p -b 0.1
     fi
