@@ -76,7 +76,7 @@ if [ -n "$1" -a -n "$2" ]; then
   fi
 fi
 
-if [ -n "${STEAM_COMPAT_CLIENT_INSTALL_PATH}" ]; then
+if [ -n "${STEAM_COMPAT_CLIENT_INSTALL_PATH}" -a -d "${STEAM_COMPAT_CLIENT_INSTALL_PATH}" ]; then
   STEAM_ROOT="$(readlink -f "${STEAM_COMPAT_CLIENT_INSTALL_PATH}" )"
 else
   if [ -e "${HOME}/.steam/root" ]; then
@@ -112,7 +112,9 @@ fi
 
 if [ -f "${STEAM_LIBRARY_FOLDER_FILE}" ]; then
   while read -r folder; do
-    STEAM_LIBRARY_FOLDERS+=( "${folder}/steamapps" )
+    if [ -n "$folder" -a -d "$folder/steamapps" ]; then
+      STEAM_LIBRARY_FOLDERS+=( "${folder}/steamapps" )
+    fi
   done <<< "$(sed -ne "s/.*\"[[:digit:]]\+\"[[:space:]]\+\"\\([^\"\]\+\)\".*/\1/p" "${STEAM_LIBRARY_FOLDER_FILE}")"
 fi
 
@@ -127,7 +129,6 @@ if [ $COMPAT_TOOL -eq 0 ]; then
     STEAM_LINUX_RUNTIME="$3"
   fi
 fi
-
 
 if [ -n "${GAME_NAME}" ]; then
 
