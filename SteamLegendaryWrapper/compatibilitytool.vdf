@@ -1,0 +1,14 @@
+"compatibilitytools"
+{
+  "compat_tools"
+  {
+	"steam_legendary_wrapper" // Internal name of this tool
+	{
+	  "install_path" "."
+	  "display_name" "Steam Legendary Wrapper"
+
+	  "from_oslist"  "windows"
+	  "to_oslist"    "linux"
+	}
+  }
+}
