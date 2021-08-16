@@ -6,6 +6,8 @@
 #   - Add game directory to PRESSURE_VESSEL_FILESYSTEMS_RO when it is not reacheable inside the Steam Linux Runtime
 #   - Per game configuration
 #   - Less procedural, more functions
+#   - Create initial configuration file if missing
+#   - Install as compatibility tool, if required by user
 
 failure() {
   local lineno=$1
