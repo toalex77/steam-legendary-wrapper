@@ -1,6 +1,6 @@
 #!/bin/bash
 # TODO:
-#   - Show error messages through zenity or similar tool
+#   - add options to list Proton and Steam Linux Runtime versions (show in zenity/notify-send if inside steam, otherwise echo to stdout)
 #   - Manage GAME_PARAMS when not run as a compatility tool
 #   - Manage GAME_PARAMS 
 #   - Add game directory to PRESSURE_VESSEL_FILESYSTEMS_RO when it is not reacheable inside the Steam Linux Runtime
@@ -8,20 +8,51 @@
 #   - Less procedural, more functions
 #   - Create initial configuration file if missing
 #   - Install as compatibility tool, if required by user
+#   - Check for game updates (legendary list-installed --check-updates - 5th column) and notify user
+#   - Check for used external tools at startup
 
-failure() {
-  local lineno=$1
-  local msg=$2
-  echo "Failed at $lineno: $msg"
+zenity="$(which zenity 2>/dev/null)"
+notifysend="$(which notify-send 2>/dev/null)"
+
+showMessage() {
+  local message="$1"
+  local level="${2:-i}"
+  local title="Steam Legendary Wrapper"
+
+  declare -A LEVELS
+  declare -a LEVEL_ARRAY
+  LEVELS[d]="Debug --info --icon=info"
+  LEVELS[i]="Info --info --icon=info"
+  LEVELS[w]="Warning --warning --icon=dialog-warning"
+  LEVELS[e]="Error --error --icon=dialog-error"
+  
+  if [ ! ${LEVELS[$level]+_} ]; then
+    level="i"
+  fi
+  LEVEL_ARRAY=( ${LEVELS[$level]} ) 
+  if [ -n "${zenity}" ]; then
+    $zenity "${LEVEL_ARRAY[1]}" --text="$message" --title="${title}" --width=240
+  elif [ -n "${notifysend}" ]; then
+    $notifysend -u normal "${LEVEL_ARRAY[2]}" "$title" "$message"
+  else
+    echo "${title}"
+    echo "${LEVEL_ARRAY[0]}: ${message}"
+  fi
 }
 
-CONFIG_HOME="${HOME}/.config"
-CONFIG_DIR="${CONFIG_HOME}/steam-legendary-wrapper"
+failure() {
+  local lineno="$1"
+  local msg="$2"
+  showMessage "Failed at $lineno: $msg" "d"
+}
 
 if [ "${DEBUG}" == "1" ]; then
   set -eE -o functrace
   trap 'failure ${LINENO} "$BASH_COMMAND"' ERR
 fi
+
+CONFIG_HOME="${HOME}/.config"
+CONFIG_DIR="${CONFIG_HOME}/steam-legendary-wrapper"
 
 if [ -d "${HOME}/.config" ]; then
   if [ ! -e "${CONFIG_DIR}" ]; then
@@ -59,7 +90,7 @@ fi
 
 python3_bin="$(which python3)"
 if [ ! -f  "${python3_bin}" ]; then
-  echo "Python 3 executable not found."
+  showMessage "Python 3 executable not found." "e"
   exit
 fi
 PYTHONPATH="$( $python3_bin -c "import sys;print(':'.join(map(str, list(filter(None, sys.path)))))" )"
@@ -69,8 +100,8 @@ if [ -n "${LEGENDARY_BIN}" -a -f "${LEGENDARY_BIN}" ]; then
   if [ -n "$(${LEGENDARY_BIN} -V | grep "^legendary version")" ]; then
     legendary_bin="${LEGENDARY_BIN}"
   else
-    echo "Specified binary \"${LEGENDARY_BIN}\" was not recognized as Legendary Launcher."
-    echo "Download a binary executable version from https://github.com/derrod/legendary/releases and put it in your PATH."
+    showMessage "Specified binary \"${LEGENDARY_BIN}\" was not recognized as Legendary Launcher.\n\
+Download a binary executable version from https://github.com/derrod/legendary/releases and put it in your PATH." "e"
   fi
 else
   legendary_bin="/opt/Heroic/resources/app.asar.unpacked/build/bin/linux/legendary"
@@ -81,13 +112,13 @@ if [ ! -f  "${legendary_bin}" ]; then
 fi
 
 if [ ! -f  "${legendary_bin}" ]; then
-  echo "Legendary executable not found."
+  showMessage "Legendary executable not found." "e"
   exit
 fi
 
 if [ "$( ldd "${legendary_bin}" 2>&1 | grep -c "not a dynamic executable" )" -ne 0 ]; then
-   echo "Legendary executable is a python script and it cannot run inside Steam Linux Runtime Environment."
-   echo "Download a binary executable version from https://github.com/derrod/legendary/releases and put it in your PATH."
+   showMessage "Legendary executable is a python script and it cannot run inside Steam Linux Runtime Environment.\n\
+Download a binary executable version from https://github.com/derrod/legendary/releases and put it in your PATH." "e"
    exit
 fi
 
@@ -121,7 +152,7 @@ else
   elif [ -e "${HOME}/.local/share/Steam" ]; then
     STEAM_ROOT="${HOME}/.local/share/Steam"
   else
-    echo "Error: Unable to locale Steam root path."
+    showMessage "Error: Unable to locale Steam root path." "e"
     exit
   fi
 fi
@@ -219,7 +250,7 @@ if [ -n "${GAME_NAME}" ]; then
   fi
 
   if [ ! -d "${PROTON_BASEDIR}" ]; then
-    echo "Proton version \"${PROTON_VER}\" not found."
+    showMessage "Proton version \"${PROTON_VER}\" not found." "e"
     exit
   fi
   
@@ -229,19 +260,19 @@ if [ -n "${GAME_NAME}" ]; then
 
   steamLinuxRuntime_manifest="${STEAM_LINUX_RUNTIME_BASEDIR}/common/${STEAM_LINUX_RUNTIME_INSTALLDIR}/toolmanifest.vdf"
   if [ ! -f "${steamLinuxRuntime_manifest}" ]; then
-    echo "Missing \"toolmanifest.vdf\" for \"${STEAM_LINUX_RUNTIME}\""
+    showMessage "Missing \"toolmanifest.vdf\" for \"${STEAM_LINUX_RUNTIME}\"" "e"
     exit
   else
     steamLinuxRuntime_commandLine="$( grep "\"commandline\"[[:space:]]\+\"[^\"]\+\"" "${steamLinuxRuntime_manifest}" | cut -d "\"" -f 4 | cut -d " " -f 1)"
     if [ -z "${steamLinuxRuntime_commandLine}" ]; then
-      echo "Unable to get Steam Linux Runtime command line."
+      showMessage "Unable to get Steam Linux Runtime command line." "e"
       exit
     fi
   fi
   
   steamLinuxRuntime_bin="${STEAM_LINUX_RUNTIME_BASEDIR}/common/${STEAM_LINUX_RUNTIME_INSTALLDIR}${steamLinuxRuntime_commandLine}"
   if [ ! -f  "${steamLinuxRuntime_bin}" ]; then
-    echo "Runtime \"${STEAM_LINUX_RUNTIME}\" not found."
+    showMessage "Runtime \"${STEAM_LINUX_RUNTIME}\" not found." "e"
     exit
   fi
 
