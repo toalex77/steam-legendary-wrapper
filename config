@@ -45,6 +45,6 @@
 #     https://github.com/doitsujin/dxvk
 
 export DXVK_FRAME_RATE="0"
-if [ -z "${SteamAppId}" -a -z "${SteamAppUser}" ]; then
+if [ "$( isInSteam )" -eq 1 ]; then
   export DXVK_HUD="fps,scale=0.75"
 fi

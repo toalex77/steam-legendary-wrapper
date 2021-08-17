@@ -1,6 +1,6 @@
 #!/bin/bash
 # TODO:
-#   - add options to list Proton and Steam Linux Runtime versions (show in zenity/notify-send if inside steam, otherwise echo to stdout)
+#   - Add options to list available Proton and Steam Linux Runtime versions (show in zenity/notify-send if inside steam, otherwise echo to stdout)
 #   - Manage GAME_PARAMS when not run as a compatility tool
 #   - Manage GAME_PARAMS 
 #   - Add game directory to PRESSURE_VESSEL_FILESYSTEMS_RO when it is not reacheable inside the Steam Linux Runtime
@@ -9,10 +9,20 @@
 #   - Create initial configuration file if missing
 #   - Install as compatibility tool, if required by user
 #   - Check for game updates (legendary list-installed --check-updates - 5th column) and notify user
-#   - Check for used external tools at startup
 
-zenity="$(which zenity 2>/dev/null)"
-notifysend="$(which notify-send 2>/dev/null)"
+isInSteam() {
+  if [ -n "${SteamAppUser}" -a -n "${SteamAppId}" ]; then
+    echo -n "0"
+    return 0
+  fi
+  echo -n "1"
+  return 1
+}
+
+required() {
+  showMessage "Command \"$1\" is required." "e"
+  exit
+}
 
 showMessage() {
   local message="$1"
@@ -25,14 +35,14 @@ showMessage() {
   LEVELS[i]="Info --info --icon=info"
   LEVELS[w]="Warning --warning --icon=dialog-warning"
   LEVELS[e]="Error --error --icon=dialog-error"
-  
+
   if [ ! ${LEVELS[$level]+_} ]; then
     level="i"
   fi
   LEVEL_ARRAY=( ${LEVELS[$level]} ) 
-  if [ -n "${zenity}" ]; then
+  if [ $( isInSteam ) -eq 0 -a -n "${zenity}" ]; then
     $zenity "${LEVEL_ARRAY[1]}" --text="$message" --title="${title}" --width=240
-  elif [ -n "${notifysend}" ]; then
+  elif [ $( isInSteam ) -eq 0 -a -n "${notifysend}" ]; then
     $notifysend -u normal "${LEVEL_ARRAY[2]}" "$title" "$message"
   else
     echo "${title}"
@@ -45,6 +55,23 @@ failure() {
   local msg="$2"
   showMessage "Failed at $lineno: $msg" "d"
 }
+
+zenity="$(which zenity 2>/dev/null)"
+notifysend="$(which notify-send 2>/dev/null)"
+python3_bin="$(which python3 2>/dev/null)" || required "python3"
+monitor_sh="$(which monitor.sh 2>/dev/null)"
+grep="$(which grep 2>/dev/null)" || required "grep"
+printf="$(which printf 2>/dev/null)" || required "printf"
+locale="$(which locale 2>/dev/null)" || required "locale"
+dirname="$(which dirname 2>/dev/null)" || required "dirname"
+basename="$(which basename 2>/dev/null)" || required "basename"
+sed="$(which sed 2>/dev/null)" || required "sed"
+tr="$(which tr 2>/dev/null)" || required "tr"
+cut="$(which cut 2>/dev/null)" || required "cut"
+sort="$(which sort 2>/dev/null)" || required "sort"
+head="$(which head 2>/dev/null)" || required "head"
+qdbus="$(which qdbus 2>/dev/null)"
+gsettings="$(which gsettings 2>/dev/null)"
 
 if [ "${DEBUG}" == "1" ]; then
   set -eE -o functrace
@@ -72,10 +99,10 @@ COMPAT_TOOL=0
 
 legendary_config="${HOME}/.config/legendary/config.ini"
 
-if [ -n "${LANGUAGE}" -a -n "$(locale -a | grep "^${LANGUAGE:0:2}")" ]; then
+if [ -n "${LANGUAGE}" -a -n "$($locale -a | $grep "^${LANGUAGE:0:2}")" ]; then
   language="--language ${LANGUAGE:0:2}"
 else
-  if [ ! -f "${legendary_config}" -o "$( grep -c locale "${legendary_config}" 2> /dev/null )" == "0" ]; then # "fix Kate Syntax Highlight
+  if [ ! -f "${legendary_config}" -o "$( $grep -c locale "${legendary_config}" 2> /dev/null )" == "0" ]; then # "fix Kate Syntax Highlight
     if [ "${LC_IDENTIFICATION}" != "" ]; then
       language="--language ${LC_IDENTIFICATION:0:2}"
     elif [ "${LANG}" != "" ]; then
@@ -88,16 +115,16 @@ else
   fi
 fi
 
-python3_bin="$(which python3)"
+
 if [ ! -f  "${python3_bin}" ]; then
   showMessage "Python 3 executable not found." "e"
   exit
 fi
 PYTHONPATH="$( $python3_bin -c "import sys;print(':'.join(map(str, list(filter(None, sys.path)))))" )"
-PYTHONHOME="$( dirname "$(echo -n "${python3_bin}")" )"
+PYTHONHOME="$( $dirname "$(echo -n "${python3_bin}")" )"
 
 if [ -n "${LEGENDARY_BIN}" -a -f "${LEGENDARY_BIN}" ]; then
-  if [ -n "$(${LEGENDARY_BIN} -V | grep "^legendary version")" ]; then
+  if [ -n "$(${LEGENDARY_BIN} -V | $grep "^legendary version")" ]; then
     legendary_bin="${LEGENDARY_BIN}"
   else
     showMessage "Specified binary \"${LEGENDARY_BIN}\" was not recognized as Legendary Launcher.\n\
@@ -116,7 +143,7 @@ if [ ! -f  "${legendary_bin}" ]; then
   exit
 fi
 
-if [ "$( ldd "${legendary_bin}" 2>&1 | grep -c "not a dynamic executable" )" -ne 0 ]; then
+if [ "$( ldd "${legendary_bin}" 2>&1 | $grep -c "not a dynamic executable" )" -ne 0 ]; then
    showMessage "Legendary executable is a python script and it cannot run inside Steam Linux Runtime Environment.\n\
 Download a binary executable version from https://github.com/derrod/legendary/releases and put it in your PATH." "e"
    exit
@@ -126,7 +153,7 @@ fi
 if [ -n "$1" -a -n "$2" ]; then
   if [ "$1" == "compatrun" -o "$1" == "compatwaitforexitandrun" ]; then
     PROTON_RUN="${1#*compat}"
-    APPDIR="$(dirname "${2}")"
+    APPDIR="$($dirname "${2}")"
     shift 2
     GAME_PARAMS=()
     for p in "$@" ; do
@@ -138,8 +165,8 @@ if [ -n "$1" -a -n "$2" ]; then
         GAME_PARAMS+=( "$p" )
       fi
     done
-    LEGENDARY_LINE="$(PYTHONHOME="${PYTHONHOME}" PYTHONPATH="${PYTHONPATH}" LC_ALL=C.UTF-8 ${legendary_bin} list-installed --show-dirs --csv | cut -d "," -f 1,7 | grep "${APPDIR}" | tr -d '\n\r')"
-    GAME_NAME="$(echo -n "${LEGENDARY_LINE}" | cut -d "," -f 1)"
+    LEGENDARY_LINE="$(PYTHONHOME="${PYTHONHOME}" PYTHONPATH="${PYTHONPATH}" LC_ALL=C.UTF-8 ${legendary_bin} list-installed --show-dirs --csv | $cut -d "," -f 1,7 | $grep "${APPDIR}" | $tr -d '\n\r')"
+    GAME_NAME="$(echo -n "${LEGENDARY_LINE}" | $cut -d "," -f 1)"
     COMPAT_TOOL=1
   fi
 fi
@@ -152,7 +179,7 @@ else
   elif [ -e "${HOME}/.local/share/Steam" ]; then
     STEAM_ROOT="${HOME}/.local/share/Steam"
   else
-    showMessage "Error: Unable to locale Steam root path." "e"
+    showMessage "Error: Unable to locate Steam root path." "e"
     exit
   fi
 fi
@@ -183,7 +210,7 @@ if [ -f "${STEAM_LIBRARY_FOLDER_FILE}" ]; then
     if [ -n "$folder" -a -d "$folder/steamapps" ]; then
       STEAM_LIBRARY_FOLDERS+=( "${folder}/steamapps" )
     fi
-  done <<< "$(sed -ne "s/.*\"[[:digit:]]\+\"[[:space:]]\+\"\\([^\"\]\+\)\".*/\1/p" "${STEAM_LIBRARY_FOLDER_FILE}")"
+  done <<< "$($sed -ne "s/.*\"[[:digit:]]\+\"[[:space:]]\+\"\\([^\"\]\+\)\".*/\1/p" "${STEAM_LIBRARY_FOLDER_FILE}")"
 fi
 
 if [ $COMPAT_TOOL -eq 0 ]; then
@@ -206,7 +233,7 @@ if [ -n "${GAME_NAME}" ]; then
     fi
     case "${PROTON_VERSION}" in
       "latest stable")
-        latest_stable="$(grep -h "\"name\"[[:space:]]\+\"Proton [[:digit:]]\+.[[:digit:]]\+" $( printf '%s/*.acf ' "${STEAM_LIBRARY_FOLDERS[@]}" ) | cut -d "\"" -f 4 | sort --version-sort -r | head -n 1 )"
+        latest_stable="$($grep -h "\"name\"[[:space:]]\+\"Proton [[:digit:]]\+.[[:digit:]]\+" $( $printf '%s/*.acf ' "${STEAM_LIBRARY_FOLDERS[@]}" ) | $cut -d "\"" -f 4 | $sort --version-sort -r | $head -n 1 )"
         if [ -n "${latest_stable}" ]; then
           PROTON_VER="${latest_stable}"
         fi
@@ -215,7 +242,7 @@ if [ -n "${GAME_NAME}" ]; then
         PROTON_VER="Proton Experimental"
       ;;
       "latest GE")
-        latest_ge="$(grep -h "^[[:space:]]\+\"Proton-[[:digit:]]\+.[[:digit:]]\+-GE-[[:digit:]]\+\"" $( printf '%s/*/compatibilitytool.vdf' "${PROTON_CUSTOM_BASEDIR[@]}") | cut -d "\"" -f 2 | sort -r --version-sort --field-separator=- | head -n 1)"
+        latest_ge="$($grep -h "^[[:space:]]\+\"Proton-[[:digit:]]\+.[[:digit:]]\+-GE-[[:digit:]]\+\"" $( $printf '%s/*/compatibilitytool.vdf' "${PROTON_CUSTOM_BASEDIR[@]}") | $cut -d "\"" -f 2 | $sort -r --version-sort --field-separator=- | $head -n 1)"
         if [ -n "${latest_ge}" ]; then
           PROTON_VER="${latest_ge}"
         fi
@@ -234,16 +261,16 @@ if [ -n "${GAME_NAME}" ]; then
     fi
   fi
 
-  PROTON_ACF="$(grep -l "\"${PROTON_VER}\"" $( printf '%s/*.acf ' "${STEAM_LIBRARY_FOLDERS[@]}" ) )"
+  PROTON_ACF="$($grep -l "\"${PROTON_VER}\"" $( $printf '%s/*.acf ' "${STEAM_LIBRARY_FOLDERS[@]}" ) )"
   if [ -n "${PROTON_ACF}" -a -f "${PROTON_ACF}" ]; then
-    PROTON_DIR="$( dirname "$(echo -n "${PROTON_ACF}")" )"
-    PROTON_INSTALLDIR="$(sed -ne "s/.*\"installdir\"[[:space:]]\+\"\\([^\"\]\+\)\".*/\1/p" "${PROTON_ACF}")"
+    PROTON_DIR="$( $dirname "$(echo -n "${PROTON_ACF}")" )"
+    PROTON_INSTALLDIR="$($sed -ne "s/.*\"installdir\"[[:space:]]\+\"\\([^\"\]\+\)\".*/\1/p" "${PROTON_ACF}")"
     PROTON_BASEDIR="${PROTON_DIR}/common/${PROTON_INSTALLDIR}"
   else
     for folder in "${PROTON_CUSTOM_BASEDIR[@]}"; do
-      PROTON_CUSTOM_VDF="$(grep -l "\"${PROTON_VER}\"" "${folder}"/*/compatibilitytool.vdf)"
+      PROTON_CUSTOM_VDF="$($grep -l "\"${PROTON_VER}\"" "${folder}"/*/compatibilitytool.vdf)"
       if [ -f "${PROTON_CUSTOM_VDF}" ]; then
-        PROTON_BASEDIR="$( dirname "$(echo -n "${PROTON_CUSTOM_VDF}")" )"
+        PROTON_BASEDIR="$( $dirname "$(echo -n "${PROTON_CUSTOM_VDF}")" )"
         break
       fi
     done
@@ -254,16 +281,16 @@ if [ -n "${GAME_NAME}" ]; then
     exit
   fi
   
-  STEAM_LINUX_RUNTIME_ACF="$(grep -l "\"name\"[[:space:]]\+\"${STEAM_LINUX_RUNTIME}\"" $( printf '%s/*.acf ' "${STEAM_LIBRARY_FOLDERS[@]}" ) )"
-  STEAM_LINUX_RUNTIME_BASEDIR="$( dirname "$(echo -n "${STEAM_LINUX_RUNTIME_ACF}")" )"
-  STEAM_LINUX_RUNTIME_INSTALLDIR="$(sed -ne "s/.*\"installdir\"[[:space:]]\+\"\\([^\"\]\+\)\".*/\1/p" "${STEAM_LINUX_RUNTIME_ACF}")"
+  STEAM_LINUX_RUNTIME_ACF="$($grep -l "\"name\"[[:space:]]\+\"${STEAM_LINUX_RUNTIME}\"" $( $printf '%s/*.acf ' "${STEAM_LIBRARY_FOLDERS[@]}" ) )"
+  STEAM_LINUX_RUNTIME_BASEDIR="$( $dirname "$(echo -n "${STEAM_LINUX_RUNTIME_ACF}")" )"
+  STEAM_LINUX_RUNTIME_INSTALLDIR="$($sed -ne "s/.*\"installdir\"[[:space:]]\+\"\\([^\"\]\+\)\".*/\1/p" "${STEAM_LINUX_RUNTIME_ACF}")"
 
   steamLinuxRuntime_manifest="${STEAM_LINUX_RUNTIME_BASEDIR}/common/${STEAM_LINUX_RUNTIME_INSTALLDIR}/toolmanifest.vdf"
   if [ ! -f "${steamLinuxRuntime_manifest}" ]; then
     showMessage "Missing \"toolmanifest.vdf\" for \"${STEAM_LINUX_RUNTIME}\"" "e"
     exit
   else
-    steamLinuxRuntime_commandLine="$( grep "\"commandline\"[[:space:]]\+\"[^\"]\+\"" "${steamLinuxRuntime_manifest}" | cut -d "\"" -f 4 | cut -d " " -f 1)"
+    steamLinuxRuntime_commandLine="$( $grep "\"commandline\"[[:space:]]\+\"[^\"]\+\"" "${steamLinuxRuntime_manifest}" | $cut -d "\"" -f 4 | $cut -d " " -f 1)"
     if [ -z "${steamLinuxRuntime_commandLine}" ]; then
       showMessage "Unable to get Steam Linux Runtime command line." "e"
       exit
@@ -276,15 +303,15 @@ if [ -n "${GAME_NAME}" ]; then
     exit
   fi
 
-  LEGENDARY_LINE="$(PYTHONHOME="${PYTHONHOME}" PYTHONPATH="${PYTHONPATH}" LC_ALL=C.UTF-8 ${legendary_bin} list-installed --show-dirs --tsv | grep "${GAME_NAME}" | tr -d '\n\r')"
+  LEGENDARY_LINE="$(PYTHONHOME="${PYTHONHOME}" PYTHONPATH="${PYTHONPATH}" LC_ALL=C.UTF-8 ${legendary_bin} list-installed --show-dirs --tsv | $grep "${GAME_NAME}" | $tr -d '\n\r')"
   
   if [ "${LEGENDARY_LINE}" != "" ]; then
-    EPIC_GAME_NAME="$(echo -n "${LEGENDARY_LINE}" | cut -f 1)"
-    GAME_DIR="$(echo -n "${LEGENDARY_LINE}" | cut -f 7)"
+    EPIC_GAME_NAME="$(echo -n "${LEGENDARY_LINE}" | $cut -f 1)"
+    GAME_DIR="$(echo -n "${LEGENDARY_LINE}" | $cut -f 7)"
 
-    GAME_BASENAME="$(basename "$(echo -n "${GAME_DIR}")")"
+    GAME_BASENAME="$($basename "$(echo -n "${GAME_DIR}")")"
 
-    GAME_DIRNAME="$(dirname "$(echo -n "${GAME_DIR}")")"
+    GAME_DIRNAME="$($dirname "$(echo -n "${GAME_DIR}")")"
     PREFIX_BASEDIR="${GAME_DIRNAME}/WinePrefix"
 
     if [ -z "${STEAM_COMPAT_CLIENT_INSTALL_PATH}" ]; then
@@ -306,15 +333,19 @@ if [ -n "${GAME_NAME}" ]; then
       resume=0
       case "${XDG_SESSION_DESKTOP}" in
         KDE)
-          if [ "$(qdbus org.kde.KWin /Compositor org.kde.kwin.Compositing.active)" == "true" ]; then
-            resume=1
-            qdbus org.kde.KWin /Compositor suspend
+          if [ -n "${qdbus}" ]; then
+            if [ "$($qdbus org.kde.KWin /Compositor org.kde.kwin.Compositing.active)" == "true" ]; then
+              resume=1
+              $qdbus org.kde.KWin /Compositor suspend
+            fi
           fi
           ;;
         GNOME)
-          if [ "$(gsettings get org.gnome.desktop.interface enable-animations)" == "true" ]; then
-            resume=1
-            gsettings set org.gnome.desktop.interface enable-animations false
+          if [ -n "${gsettings}" ]; then
+            if [ "$($gsettings get org.gnome.desktop.interface enable-animations)" == "true" ]; then
+              resume=1
+              $gsettings set org.gnome.desktop.interface enable-animations false
+            fi
           fi
           ;;
         *)
@@ -322,7 +353,6 @@ if [ -n "${GAME_NAME}" ]; then
       esac
     fi
     if [ -z "${TURN_OFF_THE_LIGHTS}" -o "${TURN_OFF_THE_LIGHTS}" == "1" ]; then
-      monitor_sh="$(which monitor.sh 2>/dev/null)"
       if [ -n "${monitor_sh}" ]; then
         ${monitor_sh} -p -b 0.1
       fi
@@ -338,7 +368,7 @@ if [ -n "${GAME_NAME}" ]; then
     fi
 
     # TODO: Manage GAME_PARAMS
-    ${steamLinuxRuntime_bin} -- sh -c 'PYTHONHOME="$( dirname "$(echo -n "$( which python3 )" )" )" PYTHONPATH="$( python3 -c "import sys;print('\'':'\''.join(map(str, list(filter(None, sys.path)))))" )" '"${legendary_bin} launch \"${EPIC_GAME_NAME}\" ${language} --no-wine --wrapper \"'${PROTON_BASEDIR}/proton' ${PROTON_RUN}\""
+    ${steamLinuxRuntime_bin} -- sh -c 'PYTHONHOME="$( $dirname "$(echo -n "$( which python3 )" )" )" PYTHONPATH="$( python3 -c "import sys;print('\'':'\''.join(map(str, list(filter(None, sys.path)))))" )" '"${legendary_bin} launch \"${EPIC_GAME_NAME}\" ${language} --no-wine --wrapper \"'${PROTON_BASEDIR}/proton' ${PROTON_RUN}\""
     
     if [ -z "${TURN_OFF_THE_LIGHTS}" -o "${TURN_OFF_THE_LIGHTS}" == "1" ]; then
       if [ -n "${monitor_sh}" ]; then
@@ -349,10 +379,14 @@ if [ -n "${GAME_NAME}" ]; then
       if [ $resume -eq 1 ]; then
         case "${XDG_SESSION_DESKTOP}" in
           KDE)
-            qdbus org.kde.KWin /Compositor resume
+            if [ -n "${qdbus}" ]; then
+              $qdbus org.kde.KWin /Compositor resume
+            fi
           ;;
           GNOME)
-            gsettings set org.gnome.desktop.interface enable-animations true
+            if [ -n "${gsettings}" ]; then
+              $gsettings set org.gnome.desktop.interface enable-animations true
+            fi
           ;;
           *)
           ;;
