@@ -1,5 +1,5 @@
 This is a wrapper to launch games from the Epic Games Store, through the alternative launcher "Legendary" (https://github.com/derrod/legendary), inside the Steam Client for Linux, within the Steam Linux Runtime environment.  
-So you have to have installed the binary version (at the moment the Python Script is not supported) for Linux of "Legendary" (ex. https://github.com/derrod/legendary/releases/download/0.20.6/legendary). It must be on one of the folder of your PATH environment varibale.
+So you have to have installed the binary version (at the moment the Python Script is not supported. Legendary [requires](https://github.com/derrod/legendary#requirements) Python 3.8+, while Steam Linux Runtime provides Python 3.7) for Linux of "Legendary" (ex. https://github.com/derrod/legendary/releases/download/0.20.6/legendary). It must be on one of the folder of your PATH environment varibale.
 You can get it from here https://github.com/derrod/legendary/releases  
 If none was found, the wrapper search if you have a system wide version of Heroic Games Launcher (https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher) in /opt/Heroic, and use it's bundled "legendary" binary executable.  
 Then put "steam-legendary-wrapper.sh" wherever you want and give it the execute permission with chmod +x steam-legendary-wrapper.sh
