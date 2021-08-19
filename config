@@ -14,6 +14,12 @@
 #
 # TURN_OFF_THE_LIGHTS=1
 
+# Set the brightness level (default 10%) at which dim the monitors, except the primary
+# Possible valuse: 0 ... 100
+# Default: 10
+#
+# BRIGHTNESS = 10
+
 # Define the preferred language to use with legendary binary through the '--language' command line parameter.
 # Use two letter language code.
 # Default: autodetect
