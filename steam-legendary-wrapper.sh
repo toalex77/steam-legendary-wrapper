@@ -1,6 +1,5 @@
 #!/bin/bash
 # TODO:
-#   - Add options to list available Proton and Steam Linux Runtime versions (show in zenity/notify-send if inside steam, otherwise echo to stdout)
 #   - Manage GAME_PARAMS when not run as a compatility tool
 #   - Manage GAME_PARAMS 
 #   - Add game directory to PRESSURE_VESSEL_FILESYSTEMS_RO when it is not reacheable inside the Steam Linux Runtime
@@ -282,6 +281,68 @@ steam_linux_runtime_bin_from_version(){
   fi
 }
 
+set_proton_version(){
+  if [ -z "${PROTON_VER}" ]; then
+    if [ -z "${PROTON_VERSION}" ]; then
+      PROTON_VERSION="latest stable"
+    fi
+    case "${PROTON_VERSION}" in
+      "latest stable")
+        latest_stable="$($grep -h "\"name\"[[:space:]]\+\"Proton [[:digit:]]\+.[[:digit:]]\+" $( $printf '%s/*.acf ' "${STEAM_LIBRARY_FOLDERS[@]}" ) | $cut -d "\"" -f 4 | $sort --version-sort -r | $head -n 1 )"
+        if [ -n "${latest_stable}" ]; then
+          PROTON_VER="${latest_stable}"
+        fi
+      ;;
+      "experimental")
+        PROTON_VER="Proton Experimental"
+      ;;
+      "latest GE")
+        latest_ge="$($grep -h "^[[:space:]]\+\"Proton-[[:digit:]]\+.[[:digit:]]\+-GE-[[:digit:]]\+\"" $( $printf '%s/*/compatibilitytool.vdf' "${PROTON_CUSTOM_BASEDIR[@]}") | $cut -d "\"" -f 2 | $sort -r --version-sort --field-separator=- | $head -n 1)"
+        if [ -n "${latest_ge}" ]; then
+          PROTON_VER="${latest_ge}"
+        fi
+      ;;
+      *)
+        PROTON_VER="${PROTON_VERSION}"
+      ;;
+    esac
+  fi
+}
+
+set_steam_linux_runtime_version(){
+  if [ -z "${STEAM_LINUX_RUNTIME}" ]; then
+    if [ -n "${STEAM_LINUX_RUNTIME_VERSION}" ]; then
+      STEAM_LINUX_RUNTIME="${STEAM_LINUX_RUNTIME_VERSION}"
+    else
+      STEAM_LINUX_RUNTIME="Steam Linux Runtime - Soldier"
+    fi
+  fi
+}
+
+list_proton_versions(){
+  local PROTON_VERSIONS
+  
+  PROTON_VERSIONS="$($grep -h "\"name\"[[:space:]]\+\"Proton.*\"" $( $printf '%s/*.acf ' "${STEAM_LIBRARY_FOLDERS[@]}" ) | $cut -d "\"" -f 4)"
+  for folder in "${PROTON_CUSTOM_BASEDIR[@]}"; do
+    PROTON_VERSIONS="${PROTON_VERSIONS}\n$($sed -e '/^[[:blank:]]*\/\//d;s/\/\/.*//' "${folder}"/*/compatibilitytool.vdf | $tr "\n" " " | $grep -o "\"compat_tools\"[^{]*{[^\"]*\"[^\"]\+\"" | $cut -d "{" -f 2 | $sed -ne "s/^[^\"]*\"\([^\"]\+\)\".*/\1/p")"
+  done
+  PROTON_VERSIONS="$(echo -e "${PROTON_VERSIONS}")"
+  if [ -n "${PROTON_VER}" ]; then
+    echo "Default: ${PROTON_VER}"
+  fi
+  echo "${PROTON_VERSIONS}" | $sort --version-sort
+}
+
+list_runtime_versions(){
+  local STEAM_LINUX_RUNTIME_VERSIONS
+
+  STEAM_LINUX_RUNTIME_VERSIONS="$($grep -h "\"name\"[[:space:]]\+\"Steam Linux Runtime[^\"]*\"" $( $printf '%s/*.acf ' "${STEAM_LIBRARY_FOLDERS[@]}" ) | cut -d "\"" -f 4 | sort)"
+  if [ -n "${STEAM_LINUX_RUNTIME}" ]; then
+    echo "Default: ${STEAM_LINUX_RUNTIME}"
+  fi
+  echo "${STEAM_LINUX_RUNTIME_VERSIONS}"
+}
+
 pause_desktop_effects(){
   if [ -z "${DISABLE_DESKTOP_EFFECTS}" ] || [ "${DISABLE_DESKTOP_EFFECTS}" == "1" ]; then
     case "${XDG_SESSION_DESKTOP}" in
@@ -371,6 +432,25 @@ if [ -d "${HOME}/.config" ]; then
   fi
 fi
 
+if [ "$#" -eq 1 ]; then
+  case "${1}" in
+    "list-proton-versions")
+      set_steam_vars
+      set_proton_version
+      list_proton_versions
+    exit
+    ;;
+    "list-runtime-versions")
+      set_steam_vars
+      set_steam_linux_runtime_version
+      list_runtime_versions
+    exit
+    ;;
+    *)
+    ;;
+  esac
+fi
+
 declare -a STEAM_LIBRARY_FOLDERS
 PROTON_RUN="waitforexitandrun"
 GAME_NAME=""
@@ -427,39 +507,8 @@ if [ -n "${APP_ID}" ] && [ -n "${GAME_DIR}" ]; then
 
   set_steam_vars
 
-  if [ -z "${PROTON_VER}" ]; then
-    if [ -z "${PROTON_VERSION}" ]; then
-      PROTON_VERSION="latest stable"
-    fi
-    case "${PROTON_VERSION}" in
-      "latest stable")
-        latest_stable="$($grep -h "\"name\"[[:space:]]\+\"Proton [[:digit:]]\+.[[:digit:]]\+" $( $printf '%s/*.acf ' "${STEAM_LIBRARY_FOLDERS[@]}" ) | $cut -d "\"" -f 4 | $sort --version-sort -r | $head -n 1 )"
-        if [ -n "${latest_stable}" ]; then
-          PROTON_VER="${latest_stable}"
-        fi
-      ;;
-      "experimental")
-        PROTON_VER="Proton Experimental"
-      ;;
-      "latest GE")
-        latest_ge="$($grep -h "^[[:space:]]\+\"Proton-[[:digit:]]\+.[[:digit:]]\+-GE-[[:digit:]]\+\"" $( $printf '%s/*/compatibilitytool.vdf' "${PROTON_CUSTOM_BASEDIR[@]}") | $cut -d "\"" -f 2 | $sort -r --version-sort --field-separator=- | $head -n 1)"
-        if [ -n "${latest_ge}" ]; then
-          PROTON_VER="${latest_ge}"
-        fi
-      ;;
-      *)
-        PROTON_VER="${PROTON_VERSION}"
-      ;;
-    esac
-  fi
-
-  if [ -z "${STEAM_LINUX_RUNTIME}" ]; then
-    if [ -n "${STEAM_LINUX_RUNTIME_VERSION}" ]; then
-      STEAM_LINUX_RUNTIME="${STEAM_LINUX_RUNTIME_VERSION}"
-    else
-      STEAM_LINUX_RUNTIME="Steam Linux Runtime - Soldier"
-    fi
-  fi
+  set_proton_version
+  set_steam_linux_runtime_version
 
   proton_basedir_from_version "${PROTON_VER}"
   steam_linux_runtime_bin_from_version "${STEAM_LINUX_RUNTIME}"
