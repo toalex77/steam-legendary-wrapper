@@ -159,7 +159,7 @@ app_dir_from_title(){
 set_brightness(){
   if [ "${BRIGHTNESS}" -eq "${BRIGHTNESS}" ] 2>/dev/null ; then
     if [ "${BRIGHTNESS}" -ge 0 ] && [ "${BRIGHTNESS}" -le 100 ]; then
-      monitor_brightness="$(LC_NUMERIC=C printf "%0.2f" "${BRIGHTNESS}e-2")"
+      monitor_brightness="$(LC_NUMERIC=C $printf "%0.2f" "${BRIGHTNESS}e-2")"
     fi
   fi
 }
@@ -354,11 +354,12 @@ if [ "${DEBUG}" == "1" ]; then
   trap 'failure ${LINENO} "$BASH_COMMAND"' ERR
 fi
 
-CONFIG_HOME="${HOME}/.config"
-CONFIG_DIR="${CONFIG_HOME}/steam-legendary-wrapper"
+set_commands
+
 BRIGHTNESS=10
 
-set_commands
+CONFIG_HOME="${HOME}/.config"
+CONFIG_DIR="${CONFIG_HOME}/steam-legendary-wrapper"
 
 if [ -d "${HOME}/.config" ]; then
   if [ ! -e "${CONFIG_DIR}" ]; then
