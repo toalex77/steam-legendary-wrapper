@@ -10,24 +10,26 @@
 #   - Add more and better code comments (functions, variables, configurations, ...)
 
 set_commands(){
-  python3_bin="$(which python3 2>/dev/null)" || required "python3"
-  grep="$(which grep 2>/dev/null)" || required "grep"
-  printf="$(which printf 2>/dev/null)" || required "printf"
-  locale="$(which locale 2>/dev/null)" || required "locale"
-  dirname="$(which dirname 2>/dev/null)" || required "dirname"
   basename="$(which basename 2>/dev/null)" || required "basename"
-  sed="$(which sed 2>/dev/null)" || required "sed"
-  tr="$(which tr 2>/dev/null)" || required "tr"
+  cat="$(which cat 2>/dev/null)" || required "cat"
   cut="$(which cut 2>/dev/null)" || required "cut"
-  sort="$(which sort 2>/dev/null)" || required "sort"
+  dirname="$(which dirname 2>/dev/null)" || required "dirname"
+  grep="$(which grep 2>/dev/null)" || required "grep"
   head="$(which head 2>/dev/null)" || required "head"
-  readlink="$(which readlink 2>/dev/null)" || required "readlink"
+  locale="$(which locale 2>/dev/null)" || required "locale"
   mkdir="$(which mkdir 2>/dev/null)" || required "mkdir"
+  printf="$(which printf 2>/dev/null)" || required "printf"
+  python3_bin="$(which python3 2>/dev/null)" || required "python3"
+  readlink="$(which readlink 2>/dev/null)" || required "readlink"
+  sed="$(which sed 2>/dev/null)" || required "sed"
+  sort="$(which sort 2>/dev/null)" || required "sort"
+  tr="$(which tr 2>/dev/null)" || required "tr"
+
+  gsettings="$(which gsettings 2>/dev/null)"
   monitor_sh="$(which monitor.sh 2>/dev/null)"
-  zenity="$(which zenity 2>/dev/null)"
   notifysend="$(which notify-send 2>/dev/null)"
   qdbus="$(which qdbus 2>/dev/null)"
-  gsettings="$(which gsettings 2>/dev/null)"
+  zenity="$(which zenity 2>/dev/null)"
 }
 
 isInSteam() {
@@ -218,7 +220,7 @@ proton_basedir_from_version(){
 
   if [ $# -eq 1 ] && [ -n "${1}" ]; then
     local PROTON_VER="${1}"
-    PROTON_ACF="$($grep -l "\"${PROTON_VER}\"" $( $printf '%s/*.acf ' "${STEAM_LIBRARY_FOLDERS[@]}" ) )"
+    PROTON_ACF="$($grep -l "\"${PROTON_VER}\"" $( $printf '%s/*.acf ' ${STEAM_LIBRARY_FOLDERS[@]} ) | $cat )"
     if [ -n "${PROTON_ACF}" ] && [ -f "${PROTON_ACF}" ]; then
       PROTON_DIR="$( $dirname "$(echo -n "${PROTON_ACF}")" )"
       PROTON_INSTALLDIR="$($sed -ne "s/.*\"installdir\"[[:space:]]\+\"\\([^\"\]\+\)\".*/\1/p" "${PROTON_ACF}")"
@@ -246,7 +248,6 @@ proton_basedir_from_version(){
 
 steam_linux_runtime_bin_from_version(){
   local STEAM_LINUX_RUNTIME_ACF
-  local STEAM_LINUX_RUNTIME_BASEDIR
   local STEAM_LINUX_RUNTIME_INSTALLDIR
   local steamLinuxRuntime_manifest
   local steamLinuxRuntime_commandLine
@@ -254,11 +255,11 @@ steam_linux_runtime_bin_from_version(){
   if [ $# -eq 1 ] && [ -n "${1}" ]; then
     local STEAM_LINUX_RUNTIME="${1}"
 
-    STEAM_LINUX_RUNTIME_ACF="$($grep -l "\"name\"[[:space:]]\+\"${STEAM_LINUX_RUNTIME}\"" $( $printf '%s/*.acf ' "${STEAM_LIBRARY_FOLDERS[@]}" ) )"
-    STEAM_LINUX_RUNTIME_BASEDIR="$( $dirname "$(echo -n "${STEAM_LINUX_RUNTIME_ACF}")" )"
+    STEAM_LINUX_RUNTIME_ACF="$($grep -l "\"name\"[[:space:]]\+\"${STEAM_LINUX_RUNTIME}\"" $( $printf '%s/*.acf ' ${STEAM_LIBRARY_FOLDERS[@]} ) | $cat )"
     STEAM_LINUX_RUNTIME_INSTALLDIR="$($sed -ne "s/.*\"installdir\"[[:space:]]\+\"\\([^\"\]\+\)\".*/\1/p" "${STEAM_LINUX_RUNTIME_ACF}")"
+    STEAM_LINUX_RUNTIME_BASEDIR="$( $dirname "$(echo -n "${STEAM_LINUX_RUNTIME_ACF}")" )/common/${STEAM_LINUX_RUNTIME_INSTALLDIR}"
 
-    steamLinuxRuntime_manifest="${STEAM_LINUX_RUNTIME_BASEDIR}/common/${STEAM_LINUX_RUNTIME_INSTALLDIR}/toolmanifest.vdf"
+    steamLinuxRuntime_manifest="${STEAM_LINUX_RUNTIME_BASEDIR}/toolmanifest.vdf"
     if [ ! -f "${steamLinuxRuntime_manifest}" ]; then
       showMessage "Missing \"toolmanifest.vdf\" for \"${STEAM_LINUX_RUNTIME}\"" "e"
       exit
@@ -270,7 +271,7 @@ steam_linux_runtime_bin_from_version(){
       fi
     fi
   
-    steamLinuxRuntime_bin="${STEAM_LINUX_RUNTIME_BASEDIR}/common/${STEAM_LINUX_RUNTIME_INSTALLDIR}${steamLinuxRuntime_commandLine}"
+    steamLinuxRuntime_bin="${STEAM_LINUX_RUNTIME_BASEDIR}/${steamLinuxRuntime_commandLine}"
     if [ ! -f  "${steamLinuxRuntime_bin}" ]; then
       showMessage "Runtime \"${STEAM_LINUX_RUNTIME}\" not found." "e"
       exit
@@ -288,7 +289,7 @@ set_proton_version(){
     fi
     case "${PROTON_VERSION}" in
       "latest stable")
-        latest_stable="$($grep -h "\"name\"[[:space:]]\+\"Proton [[:digit:]]\+.[[:digit:]]\+" $( $printf '%s/*.acf ' "${STEAM_LIBRARY_FOLDERS[@]}" ) | $cut -d "\"" -f 4 | $sort --version-sort -r | $head -n 1 )"
+        latest_stable="$($grep -h "\"name\"[[:space:]]\+\"Proton [[:digit:]]\+.[[:digit:]]\+" $( $printf '%s/*.acf ' ${STEAM_LIBRARY_FOLDERS[@]} ) | $cat | $cut -d "\"" -f 4 | $sort --version-sort -r | $head -n 1 )"
         if [ -n "${latest_stable}" ]; then
           PROTON_VER="${latest_stable}"
         fi
@@ -297,7 +298,7 @@ set_proton_version(){
         PROTON_VER="Proton Experimental"
       ;;
       "latest GE")
-        latest_ge="$($grep -h "^[[:space:]]\+\"Proton-[[:digit:]]\+.[[:digit:]]\+-GE-[[:digit:]]\+\"" $( $printf '%s/*/compatibilitytool.vdf' "${PROTON_CUSTOM_BASEDIR[@]}") | $cut -d "\"" -f 2 | $sort -r --version-sort --field-separator=- | $head -n 1)"
+        latest_ge="$($grep -h "^[[:space:]]\+\"Proton-[[:digit:]]\+.[[:digit:]]\+-GE-[[:digit:]]\+\"" $( $printf '%s/*/compatibilitytool.vdf' ${PROTON_CUSTOM_BASEDIR[@]} ) | $cut -d "\"" -f 2 | $sort -r --version-sort --field-separator=- | $head -n 1)"
         if [ -n "${latest_ge}" ]; then
           PROTON_VER="${latest_ge}"
         fi
@@ -322,7 +323,7 @@ set_steam_linux_runtime_version(){
 list_proton_versions(){
   local PROTON_VERSIONS
   
-  PROTON_VERSIONS="$($grep -h "\"name\"[[:space:]]\+\"Proton.*\"" $( $printf '%s/*.acf ' "${STEAM_LIBRARY_FOLDERS[@]}" ) | $cut -d "\"" -f 4)"
+  PROTON_VERSIONS="$($grep -h "\"name\"[[:space:]]\+\"Proton.*\"" $( $printf '%s/*.acf ' ${STEAM_LIBRARY_FOLDERS[@]} ) | $cat | $cut -d "\"" -f 4)"
   for folder in "${PROTON_CUSTOM_BASEDIR[@]}"; do
     PROTON_VERSIONS="${PROTON_VERSIONS}\n$($sed -e '/^[[:blank:]]*\/\//d;s/\/\/.*//' "${folder}"/*/compatibilitytool.vdf | $tr "\n" " " | $grep -o "\"compat_tools\"[^{]*{[^\"]*\"[^\"]\+\"" | $cut -d "{" -f 2 | $sed -ne "s/^[^\"]*\"\([^\"]\+\)\".*/\1/p")"
   done
@@ -336,7 +337,7 @@ list_proton_versions(){
 list_runtime_versions(){
   local STEAM_LINUX_RUNTIME_VERSIONS
 
-  STEAM_LINUX_RUNTIME_VERSIONS="$($grep -h "\"name\"[[:space:]]\+\"Steam Linux Runtime[^\"]*\"" $( $printf '%s/*.acf ' "${STEAM_LIBRARY_FOLDERS[@]}" ) | cut -d "\"" -f 4 | sort)"
+  STEAM_LINUX_RUNTIME_VERSIONS="$($grep -h "\"name\"[[:space:]]\+\"Steam Linux Runtime[^\"]*\"" $( $printf '%s/*.acf ' ${STEAM_LIBRARY_FOLDERS[@]} ) | $cat | cut -d "\"" -f 4 | sort)"
   if [ -n "${STEAM_LINUX_RUNTIME}" ]; then
     echo "Default: ${STEAM_LINUX_RUNTIME}"
   fi
@@ -534,7 +535,7 @@ if [ -n "${APP_ID}" ] && [ -n "${GAME_DIR}" ]; then
     export PRESSURE_VESSEL_FILESYSTEMS_RO="${legendary_bin}"
   fi
 
-  if [[ ! ${PROTON_BASEDIR} =~ ^${HOME} ]]; then
+  if [[ ! ${PROTON_BASEDIR} =~ ^${HOME} ]] && [[ ${PROTON_BASEDIR} =~ .*/compatibilitytools.d/.* ]]; then
     if [ -z "${PRESSURE_VESSEL_FILESYSTEMS_RO}" ]; then
       delimiter=""
     else
@@ -542,6 +543,7 @@ if [ -n "${APP_ID}" ] && [ -n "${GAME_DIR}" ]; then
     fi
     export PRESSURE_VESSEL_FILESYSTEMS_RO="${PRESSURE_VESSEL_FILESYSTEMS_RO}${delimiter}${PROTON_BASEDIR}"
   fi
+  export STEAM_COMPAT_TOOL_PATHS="${PROTON_BASEDIR}:${STEAM_LINUX_RUNTIME_BASEDIR}"
 
   if [ -f "${CONFIG_DIR}/games/${APP_ID}" ]; then
     . "${CONFIG_DIR}/games/${APP_ID}"
@@ -549,7 +551,7 @@ if [ -n "${APP_ID}" ] && [ -n "${GAME_DIR}" ]; then
       showMessage "Loaded configuration from ${CONFIG_DIR}/games/${APP_ID}" "d"
     fi
   fi
-exit
+
   pause_desktop_effects
   turn_off_the_lights
   # TODO: Manage GAME_PARAMS
