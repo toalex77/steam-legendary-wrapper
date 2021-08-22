@@ -1,10 +1,10 @@
 #!/bin/bash
 # TODO:
+#   - Add help
 #   - Manage GAME_PARAMS when not run as a compatility tool
 #   - Manage GAME_PARAMS 
 #   - Add game directory to PRESSURE_VESSEL_FILESYSTEMS_RO when it is not reacheable inside the Steam Linux Runtime
-#   - Per game configuration
-#   - Create initial configuration file if missing
+#   - Create initial configuration file when missing
 #   - Install as compatibility tool, if required by user
 #   - Check for game updates (legendary list-installed --check-updates - 5th column) and notify user
 #   - Add more and better code comments (functions, variables, configurations, ...)
@@ -60,9 +60,9 @@ showMessage() {
     level="i"
   fi
   LEVEL_ARRAY=( ${LEVELS[$level]} ) 
-  if [ "$( isInSteam )" -eq 0 ] && [ -n "${zenity}" ]; then
+  if [ "${level}" != "d" ] && [ "$( isInSteam )" -eq 0 ] && [ -n "${zenity}" ]; then
     $zenity "${LEVEL_ARRAY[1]}" --text="$message" --title="${title}" --width=240
-  elif [ "$( isInSteam )" -eq 0 ] && [ -n "${notifysend}" ]; then
+  elif [ "${level}" != "d" ] && [ "$( isInSteam )" -eq 0 ] && [ -n "${notifysend}" ]; then
     $notifysend -u normal "${LEVEL_ARRAY[2]}" "$title" "$message"
   else
     echo "${title}"
@@ -419,7 +419,7 @@ set_commands
 
 BRIGHTNESS=10
 
-CONFIG_HOME="${HOME}/.config"
+CONFIG_HOME="${XDG_CONFIG_HOME:-${HOME}/.config}"
 CONFIG_DIR="${CONFIG_HOME}/steam-legendary-wrapper"
 
 if [ -d "${HOME}/.config" ]; then
@@ -543,6 +543,13 @@ if [ -n "${APP_ID}" ] && [ -n "${GAME_DIR}" ]; then
     export PRESSURE_VESSEL_FILESYSTEMS_RO="${PRESSURE_VESSEL_FILESYSTEMS_RO}${delimiter}${PROTON_BASEDIR}"
   fi
 
+  if [ -f "${CONFIG_DIR}/games/${APP_ID}" ]; then
+    . "${CONFIG_DIR}/games/${APP_ID}"
+    if [ "${DEBUG}" == "1" ]; then
+      showMessage "Loaded configuration from ${CONFIG_DIR}/games/${APP_ID}" "d"
+    fi
+  fi
+exit
   pause_desktop_effects
   turn_off_the_lights
   # TODO: Manage GAME_PARAMS
