@@ -13,6 +13,7 @@
 #   - Add more and better code comments (functions, variables, configurations, ...)
 #   - Add debug code
 
+
 set_commands(){
   # coreutils
   basename="$(which basename 2>/dev/null)" || required "basename"
@@ -49,7 +50,8 @@ set_commands(){
 }
 
 isInSteam() {
-  if [ -n "${SteamAppUser}" ] && [ "${SteamAppId}" ]; then
+  # Return 0 if is in Steam, otherwise 1
+  if [ -n "${SteamAppUser}" ] && [ -n "${SteamAppId}" ]; then
     echo -n "0"
     return 0
   fi
@@ -547,8 +549,8 @@ if [ -n "${APP_ID}" ] && [ -n "${GAME_DIR}" ]; then
   export STEAM_COMPAT_DATA_PATH="${PREFIX_BASEDIR}/${GAME_BASENAME}"
   export WINEDLLPATH="${PROTON_BASEDIR}/files/lib64/wine:${PROTON_BASEDIR}/files/lib/wine"
 
-  if [ ! -d "${STEAM_COMPAT_DATA_PATH}" ]; then
-    $mkdir -p "${STEAM_COMPAT_DATA_PATH}"
+  if [ ! -d "${PREFIX_BASEDIR}/${GAME_BASENAME}" ]; then
+    $mkdir -p "${PREFIX_BASEDIR}/${GAME_BASENAME}"
   fi
 
   if [[ "${legendary_bin}" =~ ^/(usr)/.* ]]; then
@@ -565,8 +567,8 @@ if [ -n "${APP_ID}" ] && [ -n "${GAME_DIR}" ]; then
     fi
     export PRESSURE_VESSEL_FILESYSTEMS_RO="${PRESSURE_VESSEL_FILESYSTEMS_RO}${delimiter}${PROTON_BASEDIR}"
   fi
-  if [[ ! ${STEAM_COMPAT_CLIENT_INSTALL_PATH} =~ ^${HOME} ]]; then
-    export STEAM_COMPAT_MOUNTS="${STEAM_COMPAT_CLIENT_INSTALL_PATH}"
+  if [[ ! ${STEAM_COMPAT_INSTALL_PATH} =~ ^${HOME} ]]; then
+    export STEAM_COMPAT_MOUNTS="${STEAM_COMPAT_INSTALL_PATH}"
   fi
 
   if [ "$( isInSteam )" -eq 0 ]; then
@@ -583,7 +585,7 @@ if [ -n "${APP_ID}" ] && [ -n "${GAME_DIR}" ]; then
   if [ -d "${STEAM_LINUX_RUNTIME_BASEDIR}/var" ]; then
     export PRESSURE_VESSEL_VARIABLE_DIR="${STEAM_LINUX_RUNTIME_BASEDIR}/var"
   fi
-  export STEAM_COMPAT_LIBRARY_PATHS="${STEAM_COMPAT_TOOL_PATHS}:${STEAM_COMPAT_CLIENT_INSTALL_PATH}"
+  export STEAM_COMPAT_LIBRARY_PATHS="${STEAM_COMPAT_TOOL_PATHS}:${STEAM_COMPAT_INSTALL_PATH}"
 
   pause_desktop_effects
   turn_off_the_lights
