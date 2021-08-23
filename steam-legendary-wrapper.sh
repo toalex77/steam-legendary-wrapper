@@ -436,6 +436,12 @@ if [ -d "${HOME}/.config" ]; then
   if [ -f "${CONFIG_DIR}/config" ]; then
     . "${CONFIG_DIR}/config"
   fi
+  if [ -f "${CONFIG_DIR}/games/${APP_ID}" ]; then
+    . "${CONFIG_DIR}/games/${APP_ID}"
+    if [ "${DEBUG}" == "1" ]; then
+      showMessage "Loaded configuration from ${CONFIG_DIR}/games/${APP_ID}" "d"
+    fi
+  fi
 fi
 
 if [ "$#" -eq 1 ]; then
@@ -567,12 +573,6 @@ if [ -n "${APP_ID}" ] && [ -n "${GAME_DIR}" ]; then
     export PRESSURE_VESSEL_VARIABLE_DIR="${STEAM_LINUX_RUNTIME_BASEDIR}/var"
   fi
   export STEAM_COMPAT_LIBRARY_PATHS="${STEAM_COMPAT_TOOL_PATHS}:${STEAM_COMPAT_CLIENT_INSTALL_PATH}"
-  if [ -f "${CONFIG_DIR}/games/${APP_ID}" ]; then
-    . "${CONFIG_DIR}/games/${APP_ID}"
-    if [ "${DEBUG}" == "1" ]; then
-      showMessage "Loaded configuration from ${CONFIG_DIR}/games/${APP_ID}" "d"
-    fi
-  fi
 
   pause_desktop_effects
   turn_off_the_lights
