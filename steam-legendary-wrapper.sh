@@ -1,9 +1,12 @@
 #!/bin/bash
+# References:
+# - https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/-/blob/master/docs/steam-compat-tool-interface.md
+# - https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/-/merge_requests/134#note_14545
+# - https://github.com/ValveSoftware/steam-for-linux/issues/6310
+#
 # TODO:
 #   - Add help
-#   - Manage GAME_PARAMS when not run as a compatility tool
 #   - Manage GAME_PARAMS 
-#   - Add game directory to PRESSURE_VESSEL_FILESYSTEMS_RO when it is not reacheable inside the Steam Linux Runtime
 #   - Create initial configuration file when missing
 #   - Install as compatibility tool, if required by user
 #   - Check for game updates (legendary list-installed --check-updates - 5th column) and notify user
@@ -14,8 +17,10 @@ set_commands(){
   cat="$(which cat 2>/dev/null)" || required "cat"
   cut="$(which cut 2>/dev/null)" || required "cut"
   dirname="$(which dirname 2>/dev/null)" || required "dirname"
+  find="$(which find 2>/dev/null)" || required "find"
   grep="$(which grep 2>/dev/null)" || required "grep"
   head="$(which head 2>/dev/null)" || required "head"
+  ldd="$(which ldd 2>/dev/null)" || required "ldd"
   locale="$(which locale 2>/dev/null)" || required "locale"
   mkdir="$(which mkdir 2>/dev/null)" || required "mkdir"
   printf="$(which printf 2>/dev/null)" || required "printf"
@@ -123,7 +128,7 @@ find_legendary_bin(){
     exit
   fi
 
-  if [ "$( ldd "${legendary_bin}" 2>&1 | $grep -c "not a dynamic executable" )" -ne 0 ]; then
+  if [ "$( $ldd "${legendary_bin}" 2>&1 | $grep -c "not a dynamic executable" )" -ne 0 ]; then
     showMessage "Legendary executable is a python script and it cannot run inside Steam Linux Runtime Environment.\n\
   Download a binary executable version from https://github.com/derrod/legendary/releases and put it in your PATH." "e"
     exit
@@ -132,7 +137,7 @@ find_legendary_bin(){
 
 get_installed_games() {
   if [ -z "${LEGENDARY_INSTALLED_GAMES}" ]; then
-    LEGENDARY_INSTALLED_GAMES="$(PYTHONHOME="${PYTHONHOME}" PYTHONPATH="${PYTHONPATH}" LC_ALL=C.UTF-8 ${legendary_bin} list-installed --show-dirs --check-updates --csv 2>/dev/null| tr -d "\r")"
+    LEGENDARY_INSTALLED_GAMES="$( PYTHONHOME="${PYTHONHOME}" PYTHONPATH="${PYTHONPATH}" LC_ALL=C.UTF-8 ${legendary_bin} list-installed --show-dirs --check-updates --csv 2>/dev/null| tr -d "\r" )"
   fi
 }
 
@@ -183,7 +188,6 @@ set_steam_vars(){
     fi
   fi
 
-  # Manage correctly compatibility tools paths: https://github.com/ValveSoftware/steam-for-linux/issues/6310
   PROTON_CUSTOM_BASEDIR=()
   PROTON_STANDARD_PATHS=( "${STEAM_ROOT}/compatibilitytools.d" "/usr/share/steam/compatibilitytools.d" "/usr/local/share/steam/compatibilitytools.d" )
   for proton_folder in "${PROTON_STANDARD_PATHS[@]}"; do
@@ -260,6 +264,7 @@ steam_linux_runtime_bin_from_version(){
     STEAM_LINUX_RUNTIME_BASEDIR="$( $dirname "$(echo -n "${STEAM_LINUX_RUNTIME_ACF}")" )/common/${STEAM_LINUX_RUNTIME_INSTALLDIR}"
 
     steamLinuxRuntime_manifest="${STEAM_LINUX_RUNTIME_BASEDIR}/toolmanifest.vdf"
+
     if [ ! -f "${steamLinuxRuntime_manifest}" ]; then
       showMessage "Missing \"toolmanifest.vdf\" for \"${STEAM_LINUX_RUNTIME}\"" "e"
       exit
@@ -467,7 +472,6 @@ set_language
 set_python_vars
 find_legendary_bin
 
-# TODO: Manage GAME_PARAMS when not run as a compatility tool
 if [ -n "$1" ] && [ -n "$2" ]; then
   if [ "$1" == "compatrun" ] || [ "$1" == "compatwaitforexitandrun" ]; then
     PROTON_RUN="${1#*compat}"
@@ -522,6 +526,7 @@ if [ -n "${APP_ID}" ] && [ -n "${GAME_DIR}" ]; then
   if [ -z "${STEAM_COMPAT_CLIENT_INSTALL_PATH}" ]; then
     export STEAM_COMPAT_CLIENT_INSTALL_PATH=${HOME}/.steam/steam
   fi
+  export STEAM_COMPAT_INSTALL_PATH=$GAME_DIR
   export STEAM_COMPAT_DATA_PATH="${PREFIX_BASEDIR}/${GAME_BASENAME}"
   export WINEDLLPATH="${PROTON_BASEDIR}/files/lib64/wine:${PROTON_BASEDIR}/files/lib/wine"
 
@@ -543,8 +548,25 @@ if [ -n "${APP_ID}" ] && [ -n "${GAME_DIR}" ]; then
     fi
     export PRESSURE_VESSEL_FILESYSTEMS_RO="${PRESSURE_VESSEL_FILESYSTEMS_RO}${delimiter}${PROTON_BASEDIR}"
   fi
-  export STEAM_COMPAT_TOOL_PATHS="${PROTON_BASEDIR}:${STEAM_LINUX_RUNTIME_BASEDIR}"
+  if [[ ! ${STEAM_COMPAT_CLIENT_INSTALL_PATH} =~ ^${HOME} ]]; then
+    export STEAM_COMPAT_MOUNTS="${STEAM_COMPAT_CLIENT_INSTALL_PATH}"
+  fi
 
+  if [ "$( isInSteam )" -eq 0 ]; then
+    SteamPVSocket="$( $find /tmp -type d -name -name "SteamPVSocket.*" -user ${UID} > /dev/null )"
+    if [ -n  "${SteamPVSocket}" ]; then
+      export PRESSURE_VESSEL_SOCKET_DIR="${SteamPVSocket}"
+    fi
+  fi
+
+  export STEAM_COMPAT_TOOL_PATHS="${PROTON_BASEDIR}:${STEAM_LINUX_RUNTIME_BASEDIR}"
+  export PRESSURE_VESSEL_BATCH=1
+  export PRESSURE_VESSEL_GC_LEGACY_RUNTIMES=1
+  export PRESSURE_VESSEL_RUNTIME_BASE="${STEAM_LINUX_RUNTIME_BASEDIR}"
+  if [ -d "${STEAM_LINUX_RUNTIME_BASEDIR}/var" ]; then
+    export PRESSURE_VESSEL_VARIABLE_DIR="${STEAM_LINUX_RUNTIME_BASEDIR}/var"
+  fi
+  export STEAM_COMPAT_LIBRARY_PATHS="${STEAM_COMPAT_TOOL_PATHS}:${STEAM_COMPAT_CLIENT_INSTALL_PATH}"
   if [ -f "${CONFIG_DIR}/games/${APP_ID}" ]; then
     . "${CONFIG_DIR}/games/${APP_ID}"
     if [ "${DEBUG}" == "1" ]; then
@@ -554,7 +576,7 @@ if [ -n "${APP_ID}" ] && [ -n "${GAME_DIR}" ]; then
 
   pause_desktop_effects
   turn_off_the_lights
-  # TODO: Manage GAME_PARAMS
+    
   ${steamLinuxRuntime_bin} -- sh -c 'PYTHONHOME="$( $dirname "$(echo -n "$( which python3 )" )" )" PYTHONPATH="$( python3 -c "import sys;print('\'':'\''.join(map(str, list(filter(None, sys.path)))))" )" '"${legendary_bin} launch \"${APP_ID}\" ${language} --no-wine --wrapper \"'${PROTON_BASEDIR}/proton' ${PROTON_RUN}\""
 
   turn_on_the_lights
