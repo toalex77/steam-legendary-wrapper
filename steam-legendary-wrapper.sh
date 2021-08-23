@@ -11,30 +11,41 @@
 #   - Install as compatibility tool, if required by user
 #   - Check for game updates (legendary list-installed --check-updates - 5th column) and notify user
 #   - Add more and better code comments (functions, variables, configurations, ...)
+#   - Add debug code
 
 set_commands(){
+  # coreutils
   basename="$(which basename 2>/dev/null)" || required "basename"
   cat="$(which cat 2>/dev/null)" || required "cat"
   cut="$(which cut 2>/dev/null)" || required "cut"
   dirname="$(which dirname 2>/dev/null)" || required "dirname"
-  find="$(which find 2>/dev/null)" || required "find"
-  grep="$(which grep 2>/dev/null)" || required "grep"
   head="$(which head 2>/dev/null)" || required "head"
-  ldd="$(which ldd 2>/dev/null)" || required "ldd"
-  locale="$(which locale 2>/dev/null)" || required "locale"
   mkdir="$(which mkdir 2>/dev/null)" || required "mkdir"
   printf="$(which printf 2>/dev/null)" || required "printf"
-  python3_bin="$(which python3 2>/dev/null)" || required "python3"
   readlink="$(which readlink 2>/dev/null)" || required "readlink"
-  sed="$(which sed 2>/dev/null)" || required "sed"
   sort="$(which sort 2>/dev/null)" || required "sort"
   tr="$(which tr 2>/dev/null)" || required "tr"
-
+  # findutils
+  find="$(which find 2>/dev/null)" || required "find"
+  # grep
+  grep="$(which grep 2>/dev/null)" || required "grep"
+  # glibc
+  ldd="$(which ldd 2>/dev/null)" || required "ldd"
+  locale="$(which locale 2>/dev/null)" || required "locale"
+  # sed
+  sed="$(which sed 2>/dev/null)" || required "sed"
+  # python 3
+  python3_bin="$(which python3 2>/dev/null)" || required "python3"
+  #glib2-tools
   gsettings="$(which gsettings 2>/dev/null)"
-  monitor_sh="$(which monitor.sh 2>/dev/null)"
+  #libnotify-tools
   notifysend="$(which notify-send 2>/dev/null)"
-  qdbus="$(which qdbus 2>/dev/null)"
+  # libqt-qdbus
+  qdbus="$(which qdbus-qt5 2>/dev/null || which qdbus 2>/dev/null)"
+  # zenity
   zenity="$(which zenity 2>/dev/null)"
+  # https://github.com/toalex77/monitor
+  monitor_sh="$(which monitor.sh 2>/dev/null)"
 }
 
 isInSteam() {
