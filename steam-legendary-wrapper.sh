@@ -338,6 +338,50 @@ set_steam_linux_runtime_version(){
   fi
 }
 
+export_steam_compat_vars(){
+  if [ -z "${STEAM_COMPAT_CLIENT_INSTALL_PATH}" ]; then
+    export STEAM_COMPAT_CLIENT_INSTALL_PATH=${HOME}/.steam/steam
+  fi
+  export STEAM_COMPAT_INSTALL_PATH=$GAME_DIR
+  export STEAM_COMPAT_DATA_PATH="${PREFIX_BASEDIR}/${GAME_BASENAME}"
+  export WINEDLLPATH="${PROTON_BASEDIR}/files/lib64/wine:${PROTON_BASEDIR}/files/lib/wine"
+
+  if [[ "${legendary_bin}" =~ ^/(usr)/.* ]]; then
+    legendary_bin="/run/host${legendary_bin}"
+  else
+    export PRESSURE_VESSEL_FILESYSTEMS_RO="${legendary_bin}"
+  fi
+
+  if [[ ! ${PROTON_BASEDIR} =~ ^${HOME} ]] && [[ ${PROTON_BASEDIR} =~ .*/compatibilitytools.d/.* ]]; then
+    if [ -z "${PRESSURE_VESSEL_FILESYSTEMS_RO}" ]; then
+      delimiter=""
+    else
+      delimiter=":"
+    fi
+    export PRESSURE_VESSEL_FILESYSTEMS_RO="${PRESSURE_VESSEL_FILESYSTEMS_RO}${delimiter}${PROTON_BASEDIR}"
+  fi
+  if [[ ! ${STEAM_COMPAT_INSTALL_PATH} =~ ^${HOME} ]]; then
+    export STEAM_COMPAT_MOUNTS="${STEAM_COMPAT_INSTALL_PATH}"
+  fi
+
+  if [ "$( isInSteam )" -eq 0 ]; then
+    SteamPVSocket="$( $find /tmp -type d -name -name "SteamPVSocket.*" -user ${UID} > /dev/null )"
+    if [ -n  "${SteamPVSocket}" ]; then
+      export PRESSURE_VESSEL_SOCKET_DIR="${SteamPVSocket}"
+    fi
+  fi
+
+  export STEAM_COMPAT_TOOL_PATHS="${PROTON_BASEDIR}:${STEAM_LINUX_RUNTIME_BASEDIR}"
+  export PRESSURE_VESSEL_BATCH=1
+  export PRESSURE_VESSEL_GC_LEGACY_RUNTIMES=1
+  export PRESSURE_VESSEL_RUNTIME_BASE="${STEAM_LINUX_RUNTIME_BASEDIR}"
+  if [ -d "${STEAM_LINUX_RUNTIME_BASEDIR}/var" ]; then
+    export PRESSURE_VESSEL_VARIABLE_DIR="${STEAM_LINUX_RUNTIME_BASEDIR}/var"
+  fi
+  export STEAM_COMPAT_LIBRARY_PATHS="${STEAM_COMPAT_TOOL_PATHS}:${STEAM_COMPAT_INSTALL_PATH}"
+
+}
+
 list_proton_versions(){
   local PROTON_VERSIONS
   
@@ -542,50 +586,11 @@ if [ -n "${APP_ID}" ] && [ -n "${GAME_DIR}" ]; then
   GAME_DIRNAME="$($dirname "$(echo -n "${GAME_DIR}")")"
   PREFIX_BASEDIR="${GAME_DIRNAME}/WinePrefix"
 
-  if [ -z "${STEAM_COMPAT_CLIENT_INSTALL_PATH}" ]; then
-    export STEAM_COMPAT_CLIENT_INSTALL_PATH=${HOME}/.steam/steam
-  fi
-  export STEAM_COMPAT_INSTALL_PATH=$GAME_DIR
-  export STEAM_COMPAT_DATA_PATH="${PREFIX_BASEDIR}/${GAME_BASENAME}"
-  export WINEDLLPATH="${PROTON_BASEDIR}/files/lib64/wine:${PROTON_BASEDIR}/files/lib/wine"
-
   if [ ! -d "${PREFIX_BASEDIR}/${GAME_BASENAME}" ]; then
     $mkdir -p "${PREFIX_BASEDIR}/${GAME_BASENAME}"
   fi
 
-  if [[ "${legendary_bin}" =~ ^/(usr)/.* ]]; then
-    legendary_bin="/run/host${legendary_bin}"
-  else
-    export PRESSURE_VESSEL_FILESYSTEMS_RO="${legendary_bin}"
-  fi
-
-  if [[ ! ${PROTON_BASEDIR} =~ ^${HOME} ]] && [[ ${PROTON_BASEDIR} =~ .*/compatibilitytools.d/.* ]]; then
-    if [ -z "${PRESSURE_VESSEL_FILESYSTEMS_RO}" ]; then
-      delimiter=""
-    else
-      delimiter=":"
-    fi
-    export PRESSURE_VESSEL_FILESYSTEMS_RO="${PRESSURE_VESSEL_FILESYSTEMS_RO}${delimiter}${PROTON_BASEDIR}"
-  fi
-  if [[ ! ${STEAM_COMPAT_INSTALL_PATH} =~ ^${HOME} ]]; then
-    export STEAM_COMPAT_MOUNTS="${STEAM_COMPAT_INSTALL_PATH}"
-  fi
-
-  if [ "$( isInSteam )" -eq 0 ]; then
-    SteamPVSocket="$( $find /tmp -type d -name -name "SteamPVSocket.*" -user ${UID} > /dev/null )"
-    if [ -n  "${SteamPVSocket}" ]; then
-      export PRESSURE_VESSEL_SOCKET_DIR="${SteamPVSocket}"
-    fi
-  fi
-
-  export STEAM_COMPAT_TOOL_PATHS="${PROTON_BASEDIR}:${STEAM_LINUX_RUNTIME_BASEDIR}"
-  export PRESSURE_VESSEL_BATCH=1
-  export PRESSURE_VESSEL_GC_LEGACY_RUNTIMES=1
-  export PRESSURE_VESSEL_RUNTIME_BASE="${STEAM_LINUX_RUNTIME_BASEDIR}"
-  if [ -d "${STEAM_LINUX_RUNTIME_BASEDIR}/var" ]; then
-    export PRESSURE_VESSEL_VARIABLE_DIR="${STEAM_LINUX_RUNTIME_BASEDIR}/var"
-  fi
-  export STEAM_COMPAT_LIBRARY_PATHS="${STEAM_COMPAT_TOOL_PATHS}:${STEAM_COMPAT_INSTALL_PATH}"
+  export_steam_compat_vars
 
   pause_desktop_effects
   turn_off_the_lights
