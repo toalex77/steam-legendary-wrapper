@@ -33,9 +33,9 @@
 
 # If not defined in any other way (game parameter, environment variable, option, ...), specify wich Proton Version to use.
 # Special values are:
-# - "latest stable": to use the latest stable version provided by Steam
+# - "latest stable" or "latest-stable": to use the latest stable version provided by Steam
 # - "experimental": to use the last experimental version of Proton, provided by Steam
-# - "latest GE": to use the latest version of Custom Proton GloriousEggroll, that is present under "compatibilitytools.d" Steam folder
+# - "latest GE" or "latest-GE": to use the latest version of Custom Proton GloriousEggroll, that is present under "compatibilitytools.d" Steam folder
 # Default: "latest stable"
 #
 # PROTON_VERSION="latest stable"

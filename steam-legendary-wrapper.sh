@@ -1,52 +1,46 @@
 #!/bin/bash
+
 # References:
 # - https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/-/blob/master/docs/steam-compat-tool-interface.md
 # - https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/-/merge_requests/134#note_14545
 # - https://github.com/ValveSoftware/steam-for-linux/issues/6310
-#
-# TODO:
-#   - Add help
-#   - Manage GAME_PARAMS 
-#   - Create initial configuration file when missing
-#   - Install as compatibility tool, if required by user
-#   - Check for game updates (legendary list-installed --check-updates - 5th column) and notify user
-#   - Add more and better code comments (functions, variables, configurations, ...)
-#   - Add debug code
-
+# - http://www.bernaerts-nicolas.fr/linux/331-linux-cancel-zenity-progress-dialog-right-way
 
 set_commands(){
+  # which
+  which="$(which which 2>/dev/null)" || required "wich"
   # coreutils
-  basename="$(which basename 2>/dev/null)" || required "basename"
-  cat="$(which cat 2>/dev/null)" || required "cat"
-  cut="$(which cut 2>/dev/null)" || required "cut"
-  dirname="$(which dirname 2>/dev/null)" || required "dirname"
-  head="$(which head 2>/dev/null)" || required "head"
-  mkdir="$(which mkdir 2>/dev/null)" || required "mkdir"
-  printf="$(which printf 2>/dev/null)" || required "printf"
-  readlink="$(which readlink 2>/dev/null)" || required "readlink"
-  sort="$(which sort 2>/dev/null)" || required "sort"
-  tr="$(which tr 2>/dev/null)" || required "tr"
+  basename="$($which basename 2>/dev/null)" || required "basename"
+  cat="$($which cat 2>/dev/null)" || required "cat"
+  cut="$($which cut 2>/dev/null)" || required "cut"
+  dirname="$($which dirname 2>/dev/null)" || required "dirname"
+  head="$($which head 2>/dev/null)" || required "head"
+  mkdir="$($which mkdir 2>/dev/null)" || required "mkdir"
+  printf="$($which printf 2>/dev/null)" || required "printf"
+  readlink="$($which readlink 2>/dev/null)" || required "readlink"
+  sort="$($which sort 2>/dev/null)" || required "sort"
+  tr="$($which tr 2>/dev/null)" || required "tr"
   # findutils
-  find="$(which find 2>/dev/null)" || required "find"
+  find="$($which find 2>/dev/null)" || required "find"
   # grep
-  grep="$(which grep 2>/dev/null)" || required "grep"
+  grep="$($which grep 2>/dev/null)" || required "grep"
   # glibc
-  ldd="$(which ldd 2>/dev/null)" || required "ldd"
-  locale="$(which locale 2>/dev/null)" || required "locale"
+  ldd="$($which ldd 2>/dev/null)" || required "ldd"
+  locale="$($which locale 2>/dev/null)" || required "locale"
   # sed
-  sed="$(which sed 2>/dev/null)" || required "sed"
+  sed="$($which sed 2>/dev/null)" || required "sed"
   # python 3
-  python3_bin="$(which python3 2>/dev/null)" || required "python3"
+  python3_bin="$($which python3 2>/dev/null)" || required "python3"
   #glib2-tools
-  gsettings="$(which gsettings 2>/dev/null)"
+  gsettings="$($which gsettings 2>/dev/null)"
   #libnotify-tools
-  notifysend="$(which notify-send 2>/dev/null)"
+  notifysend="$($which notify-send 2>/dev/null)"
   # libqt-qdbus
-  qdbus="$(which qdbus-qt5 2>/dev/null || which qdbus 2>/dev/null)"
+  qdbus="$($which qdbus-qt5 2>/dev/null || $which qdbus 2>/dev/null)"
   # zenity
-  zenity="$(which zenity 2>/dev/null)"
+  zenity="$($which zenity 2>/dev/null)"
   # https://github.com/toalex77/monitor
-  monitor_sh="$(which monitor.sh 2>/dev/null)"
+  monitor_sh="$($which monitor.sh 2>/dev/null)"
 }
 
 isInSteam() {
@@ -90,6 +84,22 @@ showMessage() {
   fi
 }
 
+askQuestion(){
+  if [ -n "$1" ]; then
+    if [ "$( isInSteam )" -eq 0 ] && [ -n "$zenity" ]; then
+      $zenity --question --ellipsize --text "$1"
+      return $?
+    else
+      echo -en "$1 (y/n)? "
+      read -r answer
+      [ "${answer}" != "${answer#[Yy]}" ]
+      return $?
+    fi
+  else
+    return 1
+  fi
+}
+
 set_language() {
   if [ ! -f "${legendary_config}" ] || [ "$( $grep -c locale "${legendary_config}" 2> /dev/null )" == "0" ]; then
     if [ -n "${LANGUAGE}" ] && [ -n "$($locale -a | $grep "^${LANGUAGE:0:2}")" ]; then
@@ -127,7 +137,7 @@ find_legendary_bin(){
   fi
 
   if [ ! -f  "${legendary_bin}" ]; then
-    legendary_bin="$(which legendary)"
+    legendary_bin="$($which legendary)"
   fi
 
   if [ ! -f  "${legendary_bin}" ]; then
@@ -150,7 +160,7 @@ find_legendary_bin(){
 
 get_installed_games() {
   if [ -z "${LEGENDARY_INSTALLED_GAMES}" ]; then
-    LEGENDARY_INSTALLED_GAMES="$( PYTHONHOME="${PYTHONHOME}" PYTHONPATH="${PYTHONPATH}" LC_ALL=C.UTF-8 ${legendary_bin} list-installed --show-dirs --check-updates --csv 2>/dev/null| tr -d "\r" )"
+    LEGENDARY_INSTALLED_GAMES="$( PYTHONHOME="${PYTHONHOME}" PYTHONPATH="${PYTHONPATH}" LC_ALL=C.UTF-8 ${legendary_bin} list-installed --show-dirs --check-updates --csv 2>/dev/null| tr -d "\r" | $sed '1d' )"
   fi
 }
 
@@ -175,6 +185,21 @@ app_dir_from_title(){
   fi
 }
 
+app_update_from_app_id(){
+  if [ -n "$1" ]; then
+    get_installed_games
+    echo -n "$( echo -n "${LEGENDARY_INSTALLED_GAMES}" | $cut -d "," -f 1,5 | $grep "^${1}," | $tr -d '\n' | $cut -d "," -f 2)"
+  fi
+}
+
+do_game_update(){
+  if [ $# -eq 2 ] && [ -n "$1" ] && [ -n "$2" ]; then
+    ${legendary_bin} install --update-only -y "${1}" 2>&1 | while read -r line ; do
+     echo "$line" | $cat | $sed -ne "s/^\[DLManager\] INFO: = Progress: \(.*\)%.*, ETA: \(.*\)/\1\n#Remaining: \2/p"
+    done | $zenity --progress --width=240 --title "Updating ${2}" --window-icon=info --auto-close
+  fi
+}
+
 set_brightness(){
   if [ "${BRIGHTNESS}" -eq "${BRIGHTNESS}" ] 2>/dev/null ; then
     if [ "${BRIGHTNESS}" -ge 0 ] && [ "${BRIGHTNESS}" -le 100 ]; then
@@ -184,7 +209,6 @@ set_brightness(){
 }
 
 set_steam_vars(){
-  local STEAM_ROOT
   local PROTON_STANDARD_PATHS
   local STEAM_LIBRARY_FOLDER_FILE
 
@@ -194,7 +218,7 @@ set_steam_vars(){
     if [ -e "${HOME}/.steam/root" ]; then
       STEAM_ROOT="$($readlink "${HOME}/.steam/root" )"
     elif [ -e "${HOME}/.local/share/Steam" ]; then
-      STEAM_ROOT="$($readlink ${HOME}/.local/share/Steam)"
+      STEAM_ROOT="$($readlink "${HOME}/.local/share/Steam")"
     else
       showMessage "Error: Unable to locate Steam root path." "e"
       exit
@@ -226,6 +250,16 @@ set_steam_vars(){
         STEAM_LIBRARY_FOLDERS+=( "${folder}/steamapps" )
       fi
     done <<< "$($sed -ne "s/.*\"[[:digit:]]\+\"[[:space:]]\+\"\\([^\"\]\+\)\".*/\1/p" "${STEAM_LIBRARY_FOLDER_FILE}")"
+  fi
+
+  if [ -z "$zenity" ]; then
+    HOST_ARCH=i386
+    if [ "${CPU}" == "x86_64" ]; then
+      HOST_ARCH="amd64"
+    fi
+    if [ -x "${STEAM_ROOT}/ubuntu12_32/steam-runtime/${HOST_ARCH}/usr/bin/zenity" ]; then
+      zenity="${STEAM_ROOT}/ubuntu12_32/steam-runtime/${HOST_ARCH}/usr/bin/zenity"
+    fi
   fi
 }
 
@@ -301,12 +335,19 @@ steam_linux_runtime_bin_from_version(){
 }
 
 set_proton_version(){
+  if [ -n "${PROTON_VER}" ]; then
+    case "${PROTON_VER}" in
+      "latest-stable"|"latest stable"|"latest-GE"|"latest GE"|"experimental")
+      PROTON_VERSION="${PROTON_VER}"
+      PROTON_VER=""
+    esac
+  fi
   if [ -z "${PROTON_VER}" ]; then
     if [ -z "${PROTON_VERSION}" ]; then
       PROTON_VERSION="latest stable"
     fi
     case "${PROTON_VERSION}" in
-      "latest stable")
+      "latest-stable"|"latest stable")
         latest_stable="$($grep -h "\"name\"[[:space:]]\+\"Proton [[:digit:]]\+.[[:digit:]]\+" $( $printf '%s/*.acf ' ${STEAM_LIBRARY_FOLDERS[@]} ) | $cat | $cut -d "\"" -f 4 | $sort --version-sort -r | $head -n 1 )"
         if [ -n "${latest_stable}" ]; then
           PROTON_VER="${latest_stable}"
@@ -315,7 +356,7 @@ set_proton_version(){
       "experimental")
         PROTON_VER="Proton Experimental"
       ;;
-      "latest GE")
+      "latest GE"|"latest-GE")
         latest_ge="$($grep -h "^[[:space:]]\+\"Proton-[[:digit:]]\+.[[:digit:]]\+-GE-[[:digit:]]\+\"" $( $printf '%s/*/compatibilitytool.vdf' ${PROTON_CUSTOM_BASEDIR[@]} ) | $cut -d "\"" -f 2 | $sort -r --version-sort --field-separator=- | $head -n 1)"
         if [ -n "${latest_ge}" ]; then
           PROTON_VER="${latest_ge}"
@@ -339,9 +380,12 @@ set_steam_linux_runtime_version(){
 }
 
 export_steam_compat_vars(){
+  local GAME_OVERLAY_LIBS="${STEAM_ROOT}/ubuntu12_32/gameoverlayrenderer.so:${STEAM_ROOT}/ubuntu12_64/gameoverlayrenderer.so"
+
   if [ -z "${STEAM_COMPAT_CLIENT_INSTALL_PATH}" ]; then
-    export STEAM_COMPAT_CLIENT_INSTALL_PATH=${HOME}/.steam/steam
+    export STEAM_COMPAT_CLIENT_INSTALL_PATH="${STEAM_ROOT}"
   fi
+
   export STEAM_COMPAT_INSTALL_PATH=$GAME_DIR
   export STEAM_COMPAT_DATA_PATH="${PREFIX_BASEDIR}/${GAME_BASENAME}"
   export WINEDLLPATH="${PROTON_BASEDIR}/files/lib64/wine:${PROTON_BASEDIR}/files/lib/wine"
@@ -369,6 +413,12 @@ export_steam_compat_vars(){
     if [ -n  "${SteamPVSocket}" ]; then
       export PRESSURE_VESSEL_SOCKET_DIR="${SteamPVSocket}"
     fi
+  else
+    if [ -n "${LD_PRELOAD}" ]; then
+      export LD_PRELOAD="${LD_PRELOAD}:${GAME_OVERLAY_LIBS}"
+    else
+      export LD_PRELOAD="${GAME_OVERLAY_LIBS}"
+    fi
   fi
 
   export STEAM_COMPAT_TOOL_PATHS="${PROTON_BASEDIR}:${STEAM_LINUX_RUNTIME_BASEDIR}"
@@ -379,7 +429,12 @@ export_steam_compat_vars(){
     export PRESSURE_VESSEL_VARIABLE_DIR="${STEAM_LINUX_RUNTIME_BASEDIR}/var"
   fi
   export STEAM_COMPAT_LIBRARY_PATHS="${STEAM_COMPAT_TOOL_PATHS}:${STEAM_COMPAT_INSTALL_PATH}"
-
+  if [ -z "${SteamGameId}" ]; then
+    export SteamGameId=0
+  fi
+  if [ -z "${SteamOverlayGameId}" ]; then
+    export SteamOverlayGameId=0
+  fi
 }
 
 list_proton_versions(){
@@ -438,6 +493,7 @@ turn_off_the_lights(){
     fi
   fi
 }
+
 turn_on_the_lights(){
   if [ -z "${TURN_OFF_THE_LIGHTS}" ] || [ "${TURN_OFF_THE_LIGHTS}" == "1" ]; then
     if [ -n "${monitor_sh}" ]; then
@@ -479,6 +535,7 @@ if [ "${DEBUG}" == "1" ]; then
 fi
 
 set_commands
+set_steam_vars
 
 BRIGHTNESS=10
 
@@ -504,13 +561,11 @@ fi
 if [ "$#" -eq 1 ]; then
   case "${1}" in
     "list-proton-versions")
-      set_steam_vars
       set_proton_version
       list_proton_versions
     exit
     ;;
     "list-runtime-versions")
-      set_steam_vars
       set_steam_linux_runtime_version
       list_runtime_versions
     exit
@@ -572,8 +627,16 @@ if [ $COMPAT_TOOL -eq 0 ]; then
 fi
 
 if [ -n "${APP_ID}" ] && [ -n "${GAME_DIR}" ]; then
-
-  set_steam_vars
+  if [ "$( app_update_from_app_id "${APP_ID}" )" == "True" ]; then
+    askQuestion "Game \"${GAME_NAME}\" has a new version availabe.\nUpdate it before start the game?"
+    response=$?
+    if [ $response -eq 0 ]; then
+      do_game_update "${APP_ID}" "${GAME_NAME}"
+    else
+      showMessage "Game is out of date, please update or launch with update check skipping!" "e"
+      exit
+    fi
+  fi
 
   set_proton_version
   set_steam_linux_runtime_version
@@ -581,11 +644,9 @@ if [ -n "${APP_ID}" ] && [ -n "${GAME_DIR}" ]; then
   proton_basedir_from_version "${PROTON_VER}"
   steam_linux_runtime_bin_from_version "${STEAM_LINUX_RUNTIME}"
 
-  GAME_BASENAME="$($basename "$(echo -n "${GAME_DIR}")")"
-
-  GAME_DIRNAME="$($dirname "$(echo -n "${GAME_DIR}")")"
+  GAME_BASENAME="$($basename "${GAME_DIR}")"
+  GAME_DIRNAME="$($dirname "${GAME_DIR}")"
   PREFIX_BASEDIR="${GAME_DIRNAME}/WinePrefix"
-
   if [ ! -d "${PREFIX_BASEDIR}/${GAME_BASENAME}" ]; then
     $mkdir -p "${PREFIX_BASEDIR}/${GAME_BASENAME}"
   fi
@@ -594,8 +655,8 @@ if [ -n "${APP_ID}" ] && [ -n "${GAME_DIR}" ]; then
 
   pause_desktop_effects
   turn_off_the_lights
-    
-  ${steamLinuxRuntime_bin} -- sh -c 'PYTHONHOME="$( $dirname "$(echo -n "$( which python3 )" )" )" PYTHONPATH="$( python3 -c "import sys;print('\'':'\''.join(map(str, list(filter(None, sys.path)))))" )" '"${legendary_bin} launch \"${APP_ID}\" ${language} --no-wine --wrapper \"'${PROTON_BASEDIR}/proton' ${PROTON_RUN}\""
+  
+  ${steamLinuxRuntime_bin} -- sh -c 'PYTHONHOME="$( dirname "$(echo -n "$( which python3 )" )" )" PYTHONPATH="$( python3 -c "import sys;print('\'':'\''.join(map(str, list(filter(None, sys.path)))))" )" '"${legendary_bin} launch \"${APP_ID}\" ${language} --no-wine --wrapper \"'${PROTON_BASEDIR}/proton' ${PROTON_RUN}\""
 
   turn_on_the_lights
   resume_desktop_effects  
