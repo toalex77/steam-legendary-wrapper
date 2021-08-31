@@ -7,3 +7,4 @@ TODO:
   - Add debug code
   - Find a way to grab game artworks and put ~/.local/share/Steam/userdata/USER_ID/config/grid/
   - Find how to set correctly SteamGameId and SteamOverlayGameId variabiles, when not in Steam
+  - Update README

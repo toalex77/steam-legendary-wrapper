@@ -4,7 +4,8 @@
 # - https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/-/blob/master/docs/steam-compat-tool-interface.md
 # - https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/-/merge_requests/134#note_14545
 # - https://github.com/ValveSoftware/steam-for-linux/issues/6310
-# - http://www.bernaerts-nicolas.fr/linux/331-linux-cancel-zenity-progress-dialog-right-way
+
+set -m
 
 set_commands(){
   # which
@@ -192,11 +193,40 @@ app_update_from_app_id(){
   fi
 }
 
-do_game_update(){
+check_for_updates(){
   if [ $# -eq 2 ] && [ -n "$1" ] && [ -n "$2" ]; then
-    ${legendary_bin} install --update-only -y "${1}" 2>&1 | while read -r line ; do
-     echo "$line" | $cat | $sed -ne "s/^\[DLManager\] INFO: = Progress: \(.*\)%.*, ETA: \(.*\)/\1\n#Remaining: \2/p"
-    done | $zenity --progress --width=240 --title "Updating ${2}" --window-icon=info --auto-close
+    if [ "$( app_update_from_app_id "${1}" )" == "True" ]; then
+      askQuestion "Game \"${2}\" has a new version availabe.\nUpdate it before start the game?"
+      response=$?
+      if [ $response -eq 0 ]; then
+        do_game_updates "${1}" "${2}"
+      else
+        showMessage "Game is out of date, please update or launch with update check skipping!" "e"
+        exit
+      fi
+    fi
+  fi
+}
+
+do_game_updates(){
+  if [ $# -eq 2 ] && [ -n "$1" ] && [ -n "$2" ]; then
+    ( ${legendary_bin} install --repair-and-update-only --force -y "${1}" 2>&1 | while read -r line ; do
+     echo "$line" | $sed -ne "s/^\[DLManager\] INFO: = Progress: \(.*\)%.*, ETA: \(.*\)/\1\n#Remaining: \2/p"
+    done | $zenity --progress --width=240 --title "Updating ${2}" --window-icon=info --auto-close 2>/dev/null &
+    zenity_pid="$!"
+    zenity_cmd="$($cat /proc/${zenity_pid}/cmdline 2>&1 | tr "\0" " ")"
+    legendary_pid="$(jobs -p 2>/dev/null)"
+    legendary_cmd="$($cat /proc/${legendary_pid}/cmdline 2>&1 | tr "\0" " ")"
+    while [ -f "/proc/${zenity_pid}/cmdline" ] && [ "$($cat /proc/${zenity_pid}/cmdline 2>&1 | tr "\0" " ")" == "${zenity_cmd}" ]; do
+      sleep 0.5
+    done
+    if [ -f "/proc/${legendary_pid}/cmdline" ] && [ "$($cat /proc/${legendary_pid}/cmdline 2>&1 | tr "\0" " ")" == "${legendary_cmd}" ]; then
+      disown "${legendary_pid}"
+      legendary_gpid="$($cat /proc/${legendary_pid}/stat | $cut -d " " -f 5)"
+      if [ -n "${legendary_gpid}" ] && [ "${legendary_gpid}" != "0" ]; then
+        kill -SIGTERM -- -${legendary_gpid}
+      fi
+    fi )
   fi
 }
 
@@ -627,17 +657,7 @@ if [ $COMPAT_TOOL -eq 0 ]; then
 fi
 
 if [ -n "${APP_ID}" ] && [ -n "${GAME_DIR}" ]; then
-  if [ "$( app_update_from_app_id "${APP_ID}" )" == "True" ]; then
-    askQuestion "Game \"${GAME_NAME}\" has a new version availabe.\nUpdate it before start the game?"
-    response=$?
-    if [ $response -eq 0 ]; then
-      do_game_update "${APP_ID}" "${GAME_NAME}"
-    else
-      showMessage "Game is out of date, please update or launch with update check skipping!" "e"
-      exit
-    fi
-  fi
-
+  check_for_updates "${APP_ID}" "${GAME_NAME}"
   set_proton_version
   set_steam_linux_runtime_version
 
