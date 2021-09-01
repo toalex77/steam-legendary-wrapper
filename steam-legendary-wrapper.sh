@@ -45,12 +45,14 @@ set_commands(){
 }
 
 command_line_parse(){
+  local CMDLINE_PARAMS
   GAME_PARAMS=("$@")
   if [ -n "$1" ] && [ -n "$2" ]; then
     if [ "$1" == "compatrun" ] || [ "$1" == "compatwaitforexitandrun" ]; then
       PROTON_RUN="${1#*compat}"
       GAME_DIR="$($dirname "${2}")"
       shift 2
+      GAME_PARAMS=("$@")
       CMDLINE_PARAMS=()
       for p in "${GAME_PARAMS[@]}" ; do
         if [[ $p =~ ^PROTON_VER=.* ]]; then
@@ -64,7 +66,7 @@ command_line_parse(){
       GAME_PARAMS_PRE=()
       GAME_PARAMS=()
       right=0
-      if [[ "${CMDLINE_PARAMS[@]}" =~ %command% ]]; then
+      if [[ "${CMDLINE_PARAMS[*]}" =~ %command% ]]; then
         for p in "${CMDLINE_PARAMS[@]}"; do
           if [ $right -eq 0 ] && [ "$p" != "%command%" ]; then
             if [[ ! "$p" =~ ^cp|^mv|^rm ]]; then
@@ -680,11 +682,10 @@ if [ "$#" -eq 1 ]; then
 fi
 
 declare -a STEAM_LIBRARY_FOLDERS
+declare -a GAME_PARAMS
+declare -a GAME_PARAMS_PRE
 PROTON_RUN="waitforexitandrun"
 GAME_NAME=""
-GAME_PARAMS=""
-GAME_PARAMS_PRE=""
-CMDLINE_PARAMS=""
 COMPAT_TOOL=0
 DESKTOP_EFFECTS_RESUME=0
 LEGENDARY_INSTALLED_GAMES=""
@@ -718,8 +719,8 @@ if [ -n "${APP_ID}" ] && [ -n "${GAME_DIR}" ]; then
 
   pause_desktop_effects
   turn_off_the_lights
-  
-  ${GAME_PARAMS_PRE[@]} ${steamLinuxRuntime_bin} -- sh -c 'PYTHONHOME="$( dirname "$(echo -n "$( which python3 )" )" )" PYTHONPATH="$( python3 -c "import sys;print('\'':'\''.join(map(str, list(filter(None, sys.path)))))" )" '"${legendary_bin} launch \"${APP_ID}\" ${language} --no-wine --wrapper \"'${PROTON_BASEDIR}/proton' ${PROTON_RUN}\" ${GAME_PARAMS_SEPARATOR} ${GAME_PARAMS[@]}"
+ 
+  ${steamLinuxRuntime_bin} -- sh -c 'PYTHONHOME="$( dirname "$(echo -n "$( which python3 )" )" )" PYTHONPATH="$( python3 -c "import sys;print('\'':'\''.join(map(str, list(filter(None, sys.path)))))" )" '"${GAME_PARAMS_PRE[*]} ${legendary_bin} launch \"${APP_ID}\" ${language} --no-wine --wrapper \"'${PROTON_BASEDIR}/proton' ${PROTON_RUN}\" ${GAME_PARAMS_SEPARATOR} ${GAME_PARAMS[*]}"
 
   turn_on_the_lights
   resume_desktop_effects
