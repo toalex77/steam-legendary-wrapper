@@ -1,6 +1,5 @@
 TODO:
   - Add help
-  - Manage GAME_PARAMS 
   - Create initial configuration file when missing
   - Install as compatibility tool, if required by user
   - Add more and better code comments (functions, variables, configurations, ...)

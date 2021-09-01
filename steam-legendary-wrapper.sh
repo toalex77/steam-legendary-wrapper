@@ -44,6 +44,80 @@ set_commands(){
   monitor_sh="$($which monitor.sh 2>/dev/null)"
 }
 
+command_line_parse(){
+  GAME_PARAMS=("$@")
+  if [ -n "$1" ] && [ -n "$2" ]; then
+    if [ "$1" == "compatrun" ] || [ "$1" == "compatwaitforexitandrun" ]; then
+      PROTON_RUN="${1#*compat}"
+      GAME_DIR="$($dirname "${2}")"
+      shift 2
+      CMDLINE_PARAMS=()
+      for p in "${GAME_PARAMS[@]}" ; do
+        if [[ $p =~ ^PROTON_VER=.* ]]; then
+          PROTON_VER="${p#"PROTON_VER="}"
+        elif [[ $p =~ ^STEAM_LINUX_RUNTIME=.* ]]; then
+          STEAM_LINUX_RUNTIME="${p#"STEAM_LINUX_RUNTIME="}"
+        else
+          CMDLINE_PARAMS+=( "$p" )
+        fi
+      done
+      GAME_PARAMS_PRE=()
+      GAME_PARAMS=()
+      right=0
+      if [[ "${CMDLINE_PARAMS[@]}" =~ %command% ]]; then
+        for p in "${CMDLINE_PARAMS[@]}"; do
+          if [ $right -eq 0 ] && [ "$p" != "%command%" ]; then
+            if [[ ! "$p" =~ ^cp|^mv|^rm ]]; then
+              GAME_PARAMS_PRE+=( "$p" )
+            fi
+          elif [ $right -eq 1 ] && [ "$p" != "%command%" ]; then
+            GAME_PARAMS+=( "$p" )
+          elif [ $right -eq 0 ] && [ "$p" == "%command%" ]; then
+            right=1
+          fi
+        done
+      fi
+      APP_ID="$(app_name_from_app_dir "${GAME_DIR}")"
+      COMPAT_TOOL=1
+    fi
+  fi
+
+  GAME_PARAMS_COPY=("${GAME_PARAMS[@]}")
+  GAME_PARAMS=()
+  right=0
+  if [ ${#GAME_PARAMS_COPY[@]} -ge 1 ]; then
+    cnt=1
+    for p in "${GAME_PARAMS_COPY[@]}"; do
+      if [ "$p" != "--" ] && [ $right -eq 0 ] && [ $cnt -le 3 ]; then
+        if [ -z "${GAME_NAME}" ] && [ $cnt -eq 1 ]; then
+          GAME_NAME="$p"
+        fi
+        if [ -z "${PROTON_VER}" ] && [ $cnt -eq 2 ]; then
+          PROTON_VER="$p"
+        fi
+        if [ -z "${STEAM_LINUX_RUNTIME}" ] && [ $cnt -eq 3 ]; then
+          STEAM_LINUX_RUNTIME="$p"
+        fi
+      else
+        right=1
+        if [ "$p" != "--" ]; then
+          GAME_PARAMS+=( "$p" )
+        fi
+      fi
+      ((cnt++))
+    done
+  fi
+  if [ $COMPAT_TOOL -eq 0 ]; then
+    if [ -n "${GAME_NAME}" ]; then
+      APP_ID="$(app_id_from_title "${GAME_NAME}")"
+      GAME_DIR="$(app_dir_from_title "${GAME_NAME}")"
+    fi
+  fi
+  if [ "${#GAME_PARAMS[@]}" -ne 0 ]; then
+    GAME_PARAMS_SEPARATOR="--"
+  fi
+}
+
 isInSteam() {
   # Return 0 if is in Steam, otherwise 1
   if [ -n "${SteamAppUser}" ] && [ -n "${SteamAppId}" ]; then
@@ -609,9 +683,12 @@ declare -a STEAM_LIBRARY_FOLDERS
 PROTON_RUN="waitforexitandrun"
 GAME_NAME=""
 GAME_PARAMS=""
+GAME_PARAMS_PRE=""
+CMDLINE_PARAMS=""
 COMPAT_TOOL=0
 DESKTOP_EFFECTS_RESUME=0
 LEGENDARY_INSTALLED_GAMES=""
+GAME_PARAMS_SEPARATOR=""
 
 legendary_config="${HOME}/.config/legendary/config.ini"
 
@@ -620,41 +697,7 @@ set_language
 set_python_vars
 find_legendary_bin
 
-if [ -n "$1" ] && [ -n "$2" ]; then
-  if [ "$1" == "compatrun" ] || [ "$1" == "compatwaitforexitandrun" ]; then
-    PROTON_RUN="${1#*compat}"
-    GAME_DIR="$($dirname "${2}")"
-    shift 2
-    GAME_PARAMS=()
-    for p in "$@" ; do
-      if [[ $p =~ ^PROTON_VER=.* ]]; then
-        PROTON_VER="${p#"PROTON_VER="}"
-      elif [[ $p =~ ^STEAM_LINUX_RUNTIME=.* ]]; then
-        STEAM_LINUX_RUNTIME="${p#"STEAM_LINUX_RUNTIME="}"
-      else
-        GAME_PARAMS+=( "$p" )
-      fi
-    done
-    APP_ID="$(app_name_from_app_dir "${GAME_DIR}")"
-    COMPAT_TOOL=1
-  fi
-fi
-
-if [ $COMPAT_TOOL -eq 0 ]; then
-  if [ -z "${GAME_NAME}" ] && [ $# -ge 1 ]; then
-    GAME_NAME="$1"
-  fi
-  if [ -z "${PROTON_VER}" ] && [ $# -ge 2 ]; then
-    PROTON_VER="$2"
-  fi
-  if [ -z "${STEAM_LINUX_RUNTIME}" ] && [ $# -ge 3 ]; then
-    STEAM_LINUX_RUNTIME="$3"
-  fi
-  if [ -n "${GAME_NAME}" ]; then
-    APP_ID="$(app_id_from_title "${GAME_NAME}")"
-    GAME_DIR="$(app_dir_from_title "${GAME_NAME}")"
-  fi
-fi
+command_line_parse "$@"
 
 if [ -n "${APP_ID}" ] && [ -n "${GAME_DIR}" ]; then
   check_for_updates "${APP_ID}" "${GAME_NAME}"
@@ -676,8 +719,8 @@ if [ -n "${APP_ID}" ] && [ -n "${GAME_DIR}" ]; then
   pause_desktop_effects
   turn_off_the_lights
   
-  ${steamLinuxRuntime_bin} -- sh -c 'PYTHONHOME="$( dirname "$(echo -n "$( which python3 )" )" )" PYTHONPATH="$( python3 -c "import sys;print('\'':'\''.join(map(str, list(filter(None, sys.path)))))" )" '"${legendary_bin} launch \"${APP_ID}\" ${language} --no-wine --wrapper \"'${PROTON_BASEDIR}/proton' ${PROTON_RUN}\""
+  ${GAME_PARAMS_PRE[@]} ${steamLinuxRuntime_bin} -- sh -c 'PYTHONHOME="$( dirname "$(echo -n "$( which python3 )" )" )" PYTHONPATH="$( python3 -c "import sys;print('\'':'\''.join(map(str, list(filter(None, sys.path)))))" )" '"${legendary_bin} launch \"${APP_ID}\" ${language} --no-wine --wrapper \"'${PROTON_BASEDIR}/proton' ${PROTON_RUN}\" ${GAME_PARAMS_SEPARATOR} ${GAME_PARAMS[@]}"
 
   turn_on_the_lights
-  resume_desktop_effects  
+  resume_desktop_effects
 fi
