@@ -52,38 +52,38 @@ command_line_parse(){
       PROTON_RUN="${1#*compat}"
       GAME_DIR="$($dirname "${2}")"
       shift 2
-      GAME_PARAMS=("$@")
-      CMDLINE_PARAMS=()
-      for p in "${GAME_PARAMS[@]}" ; do
-        if [[ $p =~ ^PROTON_VER=.* ]]; then
-          PROTON_VER="${p#"PROTON_VER="}"
-        elif [[ $p =~ ^STEAM_LINUX_RUNTIME=.* ]]; then
-          STEAM_LINUX_RUNTIME="${p#"STEAM_LINUX_RUNTIME="}"
-        else
-          CMDLINE_PARAMS+=( "$p" )
-        fi
-      done
-      GAME_PARAMS_PRE=()
-      GAME_PARAMS=()
-      right=0
-      if [[ "${CMDLINE_PARAMS[*]}" =~ %command% ]]; then
-        for p in "${CMDLINE_PARAMS[@]}"; do
-          if [ $right -eq 0 ] && [ "$p" != "%command%" ]; then
-            if [[ ! "$p" =~ ^cp|^mv|^rm ]]; then
-              GAME_PARAMS_PRE+=( "$p" )
-            fi
-          elif [ $right -eq 1 ] && [ "$p" != "%command%" ]; then
-            GAME_PARAMS+=( "$p" )
-          elif [ $right -eq 0 ] && [ "$p" == "%command%" ]; then
-            right=1
-          fi
-        done
-      fi
       APP_ID="$(app_name_from_app_dir "${GAME_DIR}")"
       COMPAT_TOOL=1
     fi
   fi
 
+  GAME_PARAMS=("$@")
+  CMDLINE_PARAMS=()
+  for p in "${GAME_PARAMS[@]}" ; do
+    if [[ $p =~ ^PROTON_VER=.* ]]; then
+      PROTON_VER="${p#"PROTON_VER="}"
+    elif [[ $p =~ ^STEAM_LINUX_RUNTIME=.* ]]; then
+      STEAM_LINUX_RUNTIME="${p#"STEAM_LINUX_RUNTIME="}"
+    else
+      CMDLINE_PARAMS+=( "$p" )
+    fi
+  done
+  GAME_PARAMS_PRE=()
+  GAME_PARAMS=()
+  right=0
+  if [[ "${CMDLINE_PARAMS[*]}" =~ %command% ]]; then
+    for p in "${CMDLINE_PARAMS[@]}"; do
+      if [ $right -eq 0 ] && [ "$p" != "%command%" ]; then
+        if [[ ! "$p" =~ ^cp|^mv|^rm ]]; then
+          GAME_PARAMS_PRE+=( "$p" )
+        fi
+      elif [ $right -eq 1 ] && [ "$p" != "%command%" ]; then
+        GAME_PARAMS+=( "$p" )
+      elif [ $right -eq 0 ] && [ "$p" == "%command%" ]; then
+        right=1
+      fi
+    done
+  fi
   GAME_PARAMS_COPY=("${GAME_PARAMS[@]}")
   GAME_PARAMS=()
   right=0

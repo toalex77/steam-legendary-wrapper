@@ -5,5 +5,31 @@ TODO:
   - Add more and better code comments (functions, variables, configurations, ...)
   - Add debug code
   - Find a way to grab game artworks and put ~/.local/share/Steam/userdata/USER_ID/config/grid/
+    ~/.config/legendary/APP_ID.json
+    From "HeroicGamesLauncher/electron/legendary/library.ts" (line 342 to 364)
+    const gameBox = is_game ?
+      keyImages.filter(({ type }: KeyImage) => type === 'DieselGameBox')[0] :
+      keyImages.filter(({ type }: KeyImage) => type === 'Screenshot')[0]
+
+    const gameBoxTall = is_game ?
+      keyImages.filter(({ type }: KeyImage) => type === 'DieselGameBoxTall')[0] :
+      gameBox
+
+    const gameBoxStore = is_game ?
+      keyImages.filter(({ type }: KeyImage) => type === 'DieselStoreFrontTall')[0] :
+      gameBox
+
+    const logo = is_game ?
+      keyImages.filter(({ type }: KeyImage) => type === 'DieselGameBoxLogo')[0] :
+      keyImages.filter(({ type }: KeyImage) => type === 'Thumbnail')[0]
+
+    const fallBackImage =
+      'https://user-images.githubusercontent.com/26871415/103480183-1fb00680-4dd3-11eb-9171-d8c4cc601fba.jpg'
+
+    const art_cover = gameBox ? gameBox.url : null
+    const art_logo = logo ? logo.url : null
+    const art_square = gameBoxTall ? gameBoxTall.url : null
+    const art_square_front = gameBoxStore ? gameBoxStore.url : null
   - Find how to set correctly SteamGameId and SteamOverlayGameId variabiles, when not in Steam
+  - Find how to detect if Steam is running
   - Update README
