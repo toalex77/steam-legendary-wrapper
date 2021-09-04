@@ -5,11 +5,11 @@ If none was found, the wrapper search if you have a system wide version of Heroi
 Then put "steam-legendary-wrapper.sh" wherever you want and give it the execute permission with chmod +x steam-legendary-wrapper.sh
 
 Now you can create in the Steam Client for Linux a non-Steam Game (Games -> Add a Non-Steam Game to My Library), specifying the full path to where you have put steam-legendary-wrapper.sh (ex. ~/bin/steam-legendary-wrapper.sh) and the game name in the Launch Options, surrounded by double quotes, if the name containing spaces (ex. "Absolute Drift").  
-In the Launch Options, you can specify also a second optional parameter, with the desired Proton Version (ex. "Proton 6.3"). If omitted, at the moment, the wrapper set "Proton-6.14-GE-2".  
+In the Launch Options, you can specify also a second optional parameter, with the desired Proton Version (ex. "Proton 6.3"). If omitted, at the moment, the wrapper set to the latest installed stable version.  
 Then you can specify also a third optional parameter, with the desired Steam Linux Runtime version. If omitted, at the moment, the wrapper set "Steam Linux Runtime - Soldier". 
 
 You can also use it as a Steam Compatibility Tool. Just copy the "SteamLegendaryWrapper" folder under ~/.local/share/Steam/compatibilitytools.d and fix the "steam-legendary-wrapper" symbolic link to point where you have putted the wrapper. For example, if you have cloned this repository in ~/bin, with commands:
 - `mkdir -p ~/.local/share/Steam/compatibilitytools.d`
 - `cp -a ~/bin/steam-legendary-wrapper/SteamLegendaryWrapper ~/.local/share/Steam/compatibilitytools.d`
-- `ln -sf ~/bin/steam-legendary-wrapper/steam-legendary-wrapper.sh ~/.local/share/Steam/compatibilitytools.d/SteamLegendaryWrapper/steam-legendary-wrapper`
+- `ln -sf ~/bin/steam-legendary-wrapper/steam-legendary-wrapper.sh ~/.local/share/Steam/compatibilitytools.d/SteamLegendaryWrapper/proton`
 to respectively make sure that ~/.local/share/Steam/compatibilitytools.d exists, copy the SteamLegendaryWrapper folder in right place, and fix the symbolic link inside that folder.

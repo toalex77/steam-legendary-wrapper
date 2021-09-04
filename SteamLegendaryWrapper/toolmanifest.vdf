@@ -1,6 +1,0 @@
-"manifest"
-{
-  "commandline" "/steam-legendary-wrapper compatrun %verb%"
-  "commandline_waitforexitandrun" "/steam-legendary-wrapper compatwaitforexitandrun"
-  "use_sessions" "1"
-}

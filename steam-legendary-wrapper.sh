@@ -5,6 +5,12 @@
 # - https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/-/merge_requests/134#note_14545
 # - https://github.com/ValveSoftware/steam-for-linux/issues/6310
 
+if [ "$( cat /proc/$PPID/comm )" == "legendary" ]; then
+  COMPAT_TOOL=2
+else
+  COMPAT_TOOL=0
+fi
+
 set -m
 
 set_commands(){
@@ -47,12 +53,19 @@ set_commands(){
 command_line_parse(){
   local CMDLINE_PARAMS
   GAME_PARAMS=("$@")
-  if [ -n "$1" ] && [ -n "$2" ]; then
+  if [ "${COMPAT_TOOL}" -eq 2 ] && [ -n "${STEAM_COMPAT_DATA_PATH}" ] && ([ "$1" == "run" ] || [ "$1" == "waitforexitandrun" ]); then
+    PROTON_RUN="${1}"
+    GAME_EXE="${2}"
+    GAME_DIR="$($dirname "${2}")"
+    APP_ID="$(echo "$@" | $grep -o -- "-epicapp=[^[:space:]]\+" | $cut -d "=" -f 2)"
+    GAME_NAME="$(app_name_from_app_id "${APP_ID}")"
+    shift 2
+  elif [ -n "$1" ] && [ -n "$2" ]; then
     if [ "$1" == "compatrun" ] || [ "$1" == "compatwaitforexitandrun" ]; then
       PROTON_RUN="${1#*compat}"
       GAME_DIR="$($dirname "${2}")"
       shift 2
-      APP_ID="$(app_name_from_app_dir "${GAME_DIR}")"
+      APP_ID="$(app_id_from_app_dir "${GAME_DIR}")"
       COMPAT_TOOL=1
     fi
   fi
@@ -60,7 +73,9 @@ command_line_parse(){
   GAME_PARAMS=("$@")
   CMDLINE_PARAMS=()
   for p in "${GAME_PARAMS[@]}" ; do
-    if [[ $p =~ ^PROTON_VER=.* ]]; then
+    if [[ $p =~ ^PROTON_VERSION=.* ]]; then
+      PROTON_VER="${p#"PROTON_VERSION="}"
+    elif [[ $p =~ ^PROTON_VER=.* ]]; then
       PROTON_VER="${p#"PROTON_VER="}"
     elif [[ $p =~ ^STEAM_LINUX_RUNTIME=.* ]]; then
       STEAM_LINUX_RUNTIME="${p#"STEAM_LINUX_RUNTIME="}"
@@ -68,21 +83,24 @@ command_line_parse(){
       CMDLINE_PARAMS+=( "$p" )
     fi
   done
-  GAME_PARAMS_PRE=()
-  GAME_PARAMS=()
-  right=0
-  if [[ "${CMDLINE_PARAMS[*]}" =~ %command% ]]; then
-    for p in "${CMDLINE_PARAMS[@]}"; do
-      if [ $right -eq 0 ] && [ "$p" != "%command%" ]; then
-        if [[ ! "$p" =~ ^cp|^mv|^rm ]]; then
-          GAME_PARAMS_PRE+=( "$p" )
+  
+  if [ "$COMPAT_TOOL" -ne 2 ]; then
+    if [[ "${CMDLINE_PARAMS[*]}" =~ %command% ]]; then
+      GAME_PARAMS_PRE=()
+      GAME_PARAMS=()
+      right=0
+      for p in "${CMDLINE_PARAMS[@]}"; do
+        if [ $right -eq 0 ] && [ "$p" != "%command%" ]; then
+          if [[ ! "$p" =~ ^cp|^mv|^rm ]]; then
+            GAME_PARAMS_PRE+=( "$p" )
+          fi
+        elif [ $right -eq 1 ] && [ "$p" != "%command%" ]; then
+          GAME_PARAMS+=( "$p" )
+        elif [ $right -eq 0 ] && [ "$p" == "%command%" ]; then
+          right=1
         fi
-      elif [ $right -eq 1 ] && [ "$p" != "%command%" ]; then
-        GAME_PARAMS+=( "$p" )
-      elif [ $right -eq 0 ] && [ "$p" == "%command%" ]; then
-        right=1
-      fi
-    done
+      done
+    fi
   fi
   GAME_PARAMS_COPY=("${GAME_PARAMS[@]}")
   GAME_PARAMS=()
@@ -90,7 +108,7 @@ command_line_parse(){
   if [ ${#GAME_PARAMS_COPY[@]} -ge 1 ]; then
     cnt=1
     for p in "${GAME_PARAMS_COPY[@]}"; do
-      if [ "$p" != "--" ] && [ $right -eq 0 ] && [ $cnt -le 3 ]; then
+      if [ "$COMPAT_TOOL" -ne 2 ] && [ "$p" != "--" ] && [ $right -eq 0 ] && [ $cnt -le 3 ]; then
         if [ -z "${GAME_NAME}" ] && [ $cnt -eq 1 ]; then
           GAME_NAME="$p"
         fi
@@ -241,10 +259,17 @@ get_installed_games() {
   fi
 }
 
-app_name_from_app_dir(){
+app_id_from_app_dir(){
   if [ -n "$1" ]; then
     get_installed_games
     echo -n "$( echo -n "${LEGENDARY_INSTALLED_GAMES}" | $cut -d "," -f 1,7 | $grep ",${1}$" | $tr -d '\n' | $cut -d "," -f 1)"
+  fi
+}
+
+app_name_from_app_id(){
+  if [ -n "$1" ]; then
+    get_installed_games
+    echo -n "$( echo -n "${LEGENDARY_INSTALLED_GAMES}" | $cut -d "," -f 1,2 | $grep "^${1}," | $tr -d '\n' | $cut -d "," -f 2)"
   fi
 }
 
@@ -493,7 +518,10 @@ export_steam_compat_vars(){
   fi
 
   export STEAM_COMPAT_INSTALL_PATH=$GAME_DIR
-  export STEAM_COMPAT_DATA_PATH="${PREFIX_BASEDIR}/${GAME_BASENAME}"
+  if [ -z "${STEAM_COMPAT_DATA_PATH}" ]; then
+    export STEAM_COMPAT_DATA_PATH="${PREFIX_BASEDIR}/${GAME_BASENAME}"
+  fi
+
   export WINEDLLPATH="${PROTON_BASEDIR}/files/lib64/wine:${PROTON_BASEDIR}/files/lib/wine"
 
   if [[ "${legendary_bin}" =~ ^/(usr)/.* ]]; then
@@ -686,7 +714,7 @@ declare -a GAME_PARAMS
 declare -a GAME_PARAMS_PRE
 PROTON_RUN="waitforexitandrun"
 GAME_NAME=""
-COMPAT_TOOL=0
+GAME_EXE=""
 DESKTOP_EFFECTS_RESUME=0
 LEGENDARY_INSTALLED_GAMES=""
 GAME_PARAMS_SEPARATOR=""
@@ -720,7 +748,11 @@ if [ -n "${APP_ID}" ] && [ -n "${GAME_DIR}" ]; then
   pause_desktop_effects
   turn_off_the_lights
  
-  ${steamLinuxRuntime_bin} -- sh -c 'PYTHONHOME="$( dirname "$(echo -n "$( which python3 )" )" )" PYTHONPATH="$( python3 -c "import sys;print('\'':'\''.join(map(str, list(filter(None, sys.path)))))" )" '"${GAME_PARAMS_PRE[*]} ${legendary_bin} launch \"${APP_ID}\" ${language} --no-wine --wrapper \"'${PROTON_BASEDIR}/proton' ${PROTON_RUN}\" ${GAME_PARAMS_SEPARATOR} ${GAME_PARAMS[*]}"
+  if [ "${COMPAT_TOOL}" -ne 2 ]; then
+    ${steamLinuxRuntime_bin} -- sh -c 'PYTHONHOME="$( dirname "$(echo -n "$( which python3 )" )" )" PYTHONPATH="$( python3 -c "import sys;print('\'':'\''.join(map(str, list(filter(None, sys.path)))))" )" '"${GAME_PARAMS_PRE[*]} ${legendary_bin} launch \"${APP_ID}\" ${language} --no-wine --wrapper \"'${PROTON_BASEDIR}/proton' ${PROTON_RUN}\" ${GAME_PARAMS_SEPARATOR} ${GAME_PARAMS[*]}"
+  else
+    ${steamLinuxRuntime_bin} "${PROTON_BASEDIR}/proton" ${PROTON_RUN} -- $GAME_EXE ${GAME_PARAMS[*]}
+  fi
 
   turn_on_the_lights
   resume_desktop_effects
