@@ -53,7 +53,11 @@ set_commands(){
 command_line_parse(){
   local CMDLINE_PARAMS
   GAME_PARAMS=("$@")
-  if [ "${COMPAT_TOOL}" -eq 2 ] && [ -n "${STEAM_COMPAT_DATA_PATH}" ] && ([ "$1" == "run" ] || [ "$1" == "waitforexitandrun" ]); then
+  if [[ "${GAME_PARAMS[*]}" =~ -AUTH_PASSWORD=.* ]] && [[ "${GAME_PARAMS[*]}" =~ -AUTH_TYPE=.* ]] && [[ "${GAME_PARAMS[*]}" =~ -epicapp=.* ]] && [[ "${GAME_PARAMS[*]}" =~ -epicenv=.* ]] && [[ "${GAME_PARAMS[*]}" =~ -EpicPortal ]] && [[ "${GAME_PARAMS[*]}" =~ -epicusername=.* ]] && [[ "${GAME_PARAMS[*]}" =~ -epicuserid=.* ]]; then
+    COMPAT_TOOL=2
+  fi
+
+  if [ "${COMPAT_TOOL}" -eq 2 ] && [ -n "${STEAM_COMPAT_DATA_PATH}" ] && { [ "$1" == "run" ] || [ "$1" == "waitforexitandrun" ]; }; then
     PROTON_RUN="${1}"
     GAME_EXE="${2}"
     GAME_DIR="$($dirname "${2}")"
@@ -402,7 +406,7 @@ proton_basedir_from_version(){
 
   if [ $# -eq 1 ] && [ -n "${1}" ]; then
     local PROTON_VER="${1}"
-    PROTON_ACF="$($grep -l "\"${PROTON_VER}\"" $( $printf '%s/*.acf ' ${STEAM_LIBRARY_FOLDERS[@]} ) | $cat )"
+    PROTON_ACF="$($grep -l "\"${PROTON_VER}\"" $( $printf "%s/*.acf\n" "${STEAM_LIBRARY_FOLDERS[@]}" ) )"
     if [ -n "${PROTON_ACF}" ] && [ -f "${PROTON_ACF}" ]; then
       PROTON_DIR="$( $dirname "$(echo -n "${PROTON_ACF}")" )"
       PROTON_INSTALLDIR="$($sed -ne "s/.*\"installdir\"[[:space:]]\+\"\\([^\"\]\+\)\".*/\1/p" "${PROTON_ACF}")"
@@ -437,7 +441,7 @@ steam_linux_runtime_bin_from_version(){
   if [ $# -eq 1 ] && [ -n "${1}" ]; then
     local STEAM_LINUX_RUNTIME="${1}"
 
-    STEAM_LINUX_RUNTIME_ACF="$($grep -l "\"name\"[[:space:]]\+\"${STEAM_LINUX_RUNTIME}\"" $( $printf '%s/*.acf ' ${STEAM_LIBRARY_FOLDERS[@]} ) | $cat )"
+    STEAM_LINUX_RUNTIME_ACF="$($grep -l "\"name\"[[:space:]]\+\"${STEAM_LINUX_RUNTIME}\"" $( $printf "%s/*.acf\n" "${STEAM_LIBRARY_FOLDERS[@]}" ) | $cat )"
     STEAM_LINUX_RUNTIME_INSTALLDIR="$($sed -ne "s/.*\"installdir\"[[:space:]]\+\"\\([^\"\]\+\)\".*/\1/p" "${STEAM_LINUX_RUNTIME_ACF}")"
     STEAM_LINUX_RUNTIME_BASEDIR="$( $dirname "$(echo -n "${STEAM_LINUX_RUNTIME_ACF}")" )/common/${STEAM_LINUX_RUNTIME_INSTALLDIR}"
 
@@ -479,7 +483,7 @@ set_proton_version(){
     fi
     case "${PROTON_VERSION}" in
       "latest-stable"|"latest stable")
-        latest_stable="$($grep -h "\"name\"[[:space:]]\+\"Proton [[:digit:]]\+.[[:digit:]]\+" $( $printf '%s/*.acf ' ${STEAM_LIBRARY_FOLDERS[@]} ) | $cat | $cut -d "\"" -f 4 | $sort --version-sort -r | $head -n 1 )"
+        latest_stable="$($grep -h "\"name\"[[:space:]]\+\"Proton [[:digit:]]\+.[[:digit:]]\+" $( $printf "%s/*.acf\n" "${STEAM_LIBRARY_FOLDERS[@]}" ) | $cut -d "\"" -f 4 | $sort --version-sort -r | $head -n 1 )"
         if [ -n "${latest_stable}" ]; then
           PROTON_VER="${latest_stable}"
         fi
@@ -488,7 +492,7 @@ set_proton_version(){
         PROTON_VER="Proton Experimental"
       ;;
       "latest GE"|"latest-GE")
-        latest_ge="$($grep -h "^[[:space:]]\+\"Proton-[[:digit:]]\+.[[:digit:]]\+-GE-[[:digit:]]\+\"" $( $printf '%s/*/compatibilitytool.vdf' ${PROTON_CUSTOM_BASEDIR[@]} ) | $cut -d "\"" -f 2 | $sort -r --version-sort --field-separator=- | $head -n 1)"
+        latest_ge="$($grep -h "^[[:space:]]\+\"Proton-[[:digit:]]\+.[[:digit:]]\+-GE-[[:digit:]]\+\"" $( $printf "%s/*/compatibilitytool.vdf\n" "${PROTON_CUSTOM_BASEDIR[@]}" ) | $cut -d "\"" -f 2 | $sort -r --version-sort --field-separator=- | $head -n 1)"
         if [ -n "${latest_ge}" ]; then
           PROTON_VER="${latest_ge}"
         fi
@@ -574,7 +578,7 @@ export_steam_compat_vars(){
 list_proton_versions(){
   local PROTON_VERSIONS
   
-  PROTON_VERSIONS="$($grep -h "\"name\"[[:space:]]\+\"Proton.*\"" $( $printf '%s/*.acf ' ${STEAM_LIBRARY_FOLDERS[@]} ) | $cat | $cut -d "\"" -f 4)"
+  PROTON_VERSIONS="$($grep -h "\"name\"[[:space:]]\+\"Proton.*\"" $( $printf "%s/*.acf\n" "${STEAM_LIBRARY_FOLDERS[@]}" ) | $cut -d "\"" -f 4)"
   for folder in "${PROTON_CUSTOM_BASEDIR[@]}"; do
     PROTON_VERSIONS="${PROTON_VERSIONS}\n$($sed -e '/^[[:blank:]]*\/\//d;s/\/\/.*//' "${folder}"/*/compatibilitytool.vdf | $tr "\n" " " | $grep -o "\"compat_tools\"[^{]*{[^\"]*\"[^\"]\+\"" | $cut -d "{" -f 2 | $sed -ne "s/^[^\"]*\"\([^\"]\+\)\".*/\1/p")"
   done
@@ -588,7 +592,7 @@ list_proton_versions(){
 list_runtime_versions(){
   local STEAM_LINUX_RUNTIME_VERSIONS
 
-  STEAM_LINUX_RUNTIME_VERSIONS="$($grep -h "\"name\"[[:space:]]\+\"Steam Linux Runtime[^\"]*\"" $( $printf '%s/*.acf ' ${STEAM_LIBRARY_FOLDERS[@]} ) | $cat | cut -d "\"" -f 4 | sort)"
+  STEAM_LINUX_RUNTIME_VERSIONS="$($grep -h "\"name\"[[:space:]]\+\"Steam Linux Runtime[^\"]*\"" $( $printf "%s/*.acf\n" "${STEAM_LIBRARY_FOLDERS[@]}" ) | $cut -d "\"" -f 4 | $sort)"
   if [ -n "${STEAM_LINUX_RUNTIME}" ]; then
     echo "Default: ${STEAM_LINUX_RUNTIME}"
   fi
@@ -718,7 +722,6 @@ GAME_EXE=""
 DESKTOP_EFFECTS_RESUME=0
 LEGENDARY_INSTALLED_GAMES=""
 GAME_PARAMS_SEPARATOR=""
-
 legendary_config="${HOME}/.config/legendary/config.ini"
 
 set_brightness
