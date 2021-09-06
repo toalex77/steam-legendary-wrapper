@@ -172,6 +172,7 @@ showMessage() {
   if [ ! ${LEVELS[$level]+_} ]; then
     level="i"
   fi
+  # shellcheck disable=SC2206
   LEVEL_ARRAY=( ${LEVELS[$level]} ) 
   if [ "${level}" != "d" ] && [ "$( isInSteam )" -eq 0 ] && [ -n "${zenity}" ]; then
     $zenity "${LEVEL_ARRAY[1]}" --text="$message" --title="${title}" --width=240
@@ -319,17 +320,17 @@ do_game_updates(){
      echo "$line" | $sed -ne "s/^\[DLManager\] INFO: = Progress: \(.*\)%.*, ETA: \(.*\)/\1\n#Remaining: \2/p"
     done | $zenity --progress --width=240 --title "Updating ${2}" --window-icon=info --auto-close 2>/dev/null &
     zenity_pid="$!"
-    zenity_cmd="$($cat /proc/${zenity_pid}/cmdline 2>&1 | tr "\0" " ")"
+    zenity_cmd="$($cat "/proc/${zenity_pid}/cmdline" 2>&1 | tr "\0" " ")"
     legendary_pid="$(jobs -p 2>/dev/null)"
-    legendary_cmd="$($cat /proc/${legendary_pid}/cmdline 2>&1 | tr "\0" " ")"
-    while [ -f "/proc/${zenity_pid}/cmdline" ] && [ "$($cat /proc/${zenity_pid}/cmdline 2>&1 | tr "\0" " ")" == "${zenity_cmd}" ]; do
+    legendary_cmd="$($cat "/proc/${legendary_pid}/cmdline" 2>&1 | tr "\0" " ")"
+    while [ -f "/proc/${zenity_pid}/cmdline" ] && [ "$($cat "/proc/${zenity_pid}/cmdline" 2>&1 | tr "\0" " ")" == "${zenity_cmd}" ]; do
       sleep 0.5
     done
-    if [ -f "/proc/${legendary_pid}/cmdline" ] && [ "$($cat /proc/${legendary_pid}/cmdline 2>&1 | tr "\0" " ")" == "${legendary_cmd}" ]; then
+    if [ -f "/proc/${legendary_pid}/cmdline" ] && [ "$($cat "/proc/${legendary_pid}/cmdline" 2>&1 | tr "\0" " ")" == "${legendary_cmd}" ]; then
       disown "${legendary_pid}"
-      legendary_gpid="$($cat /proc/${legendary_pid}/stat | $cut -d " " -f 5)"
+      legendary_gpid="$($cat "/proc/${legendary_pid}/stat" | $cut -d " " -f 5)"
       if [ -n "${legendary_gpid}" ] && [ "${legendary_gpid}" != "0" ]; then
-        kill -SIGTERM -- -${legendary_gpid}
+        kill -SIGTERM -- -"${legendary_gpid}"
       fi
     fi )
   fi
@@ -406,6 +407,7 @@ proton_basedir_from_version(){
 
   if [ $# -eq 1 ] && [ -n "${1}" ]; then
     local PROTON_VER="${1}"
+    # shellcheck disable=SC2046
     PROTON_ACF="$($grep -l "\"${PROTON_VER}\"" $( $printf "%s/*.acf\n" "${STEAM_LIBRARY_FOLDERS[@]}" ) )"
     if [ -n "${PROTON_ACF}" ] && [ -f "${PROTON_ACF}" ]; then
       PROTON_DIR="$( $dirname "$(echo -n "${PROTON_ACF}")" )"
@@ -440,7 +442,7 @@ steam_linux_runtime_bin_from_version(){
 
   if [ $# -eq 1 ] && [ -n "${1}" ]; then
     local STEAM_LINUX_RUNTIME="${1}"
-
+    # shellcheck disable=SC2046
     STEAM_LINUX_RUNTIME_ACF="$($grep -l "\"name\"[[:space:]]\+\"${STEAM_LINUX_RUNTIME}\"" $( $printf "%s/*.acf\n" "${STEAM_LIBRARY_FOLDERS[@]}" ) | $cat )"
     STEAM_LINUX_RUNTIME_INSTALLDIR="$($sed -ne "s/.*\"installdir\"[[:space:]]\+\"\\([^\"\]\+\)\".*/\1/p" "${STEAM_LINUX_RUNTIME_ACF}")"
     STEAM_LINUX_RUNTIME_BASEDIR="$( $dirname "$(echo -n "${STEAM_LINUX_RUNTIME_ACF}")" )/common/${STEAM_LINUX_RUNTIME_INSTALLDIR}"
@@ -483,6 +485,7 @@ set_proton_version(){
     fi
     case "${PROTON_VERSION}" in
       "latest-stable"|"latest stable")
+        # shellcheck disable=SC2046
         latest_stable="$($grep -h "\"name\"[[:space:]]\+\"Proton [[:digit:]]\+.[[:digit:]]\+" $( $printf "%s/*.acf\n" "${STEAM_LIBRARY_FOLDERS[@]}" ) | $cut -d "\"" -f 4 | $sort --version-sort -r | $head -n 1 )"
         if [ -n "${latest_stable}" ]; then
           PROTON_VER="${latest_stable}"
@@ -492,6 +495,7 @@ set_proton_version(){
         PROTON_VER="Proton Experimental"
       ;;
       "latest GE"|"latest-GE")
+        # shellcheck disable=SC2046
         latest_ge="$($grep -h "^[[:space:]]\+\"Proton-[[:digit:]]\+.[[:digit:]]\+-GE-[[:digit:]]\+\"" $( $printf "%s/*/compatibilitytool.vdf\n" "${PROTON_CUSTOM_BASEDIR[@]}" ) | $cut -d "\"" -f 2 | $sort -r --version-sort --field-separator=- | $head -n 1)"
         if [ -n "${latest_ge}" ]; then
           PROTON_VER="${latest_ge}"
@@ -577,7 +581,7 @@ export_steam_compat_vars(){
 
 list_proton_versions(){
   local PROTON_VERSIONS
-  
+  # shellcheck disable=SC2046
   PROTON_VERSIONS="$($grep -h "\"name\"[[:space:]]\+\"Proton.*\"" $( $printf "%s/*.acf\n" "${STEAM_LIBRARY_FOLDERS[@]}" ) | $cut -d "\"" -f 4)"
   for folder in "${PROTON_CUSTOM_BASEDIR[@]}"; do
     PROTON_VERSIONS="${PROTON_VERSIONS}\n$($sed -e '/^[[:blank:]]*\/\//d;s/\/\/.*//' "${folder}"/*/compatibilitytool.vdf | $tr "\n" " " | $grep -o "\"compat_tools\"[^{]*{[^\"]*\"[^\"]\+\"" | $cut -d "{" -f 2 | $sed -ne "s/^[^\"]*\"\([^\"]\+\)\".*/\1/p")"
@@ -591,7 +595,7 @@ list_proton_versions(){
 
 list_runtime_versions(){
   local STEAM_LINUX_RUNTIME_VERSIONS
-
+  # shellcheck disable=SC2046
   STEAM_LINUX_RUNTIME_VERSIONS="$($grep -h "\"name\"[[:space:]]\+\"Steam Linux Runtime[^\"]*\"" $( $printf "%s/*.acf\n" "${STEAM_LIBRARY_FOLDERS[@]}" ) | $cut -d "\"" -f 4 | $sort)"
   if [ -n "${STEAM_LINUX_RUNTIME}" ]; then
     echo "Default: ${STEAM_LINUX_RUNTIME}"
@@ -686,9 +690,11 @@ if [ -d "${HOME}/.config" ]; then
   fi
 
   if [ -f "${CONFIG_DIR}/config" ]; then
+    # shellcheck disable=SC1091
     . "${CONFIG_DIR}/config"
   fi
   if [ -f "${CONFIG_DIR}/games/${APP_ID}" ]; then
+    # shellcheck disable=SC1090
     . "${CONFIG_DIR}/games/${APP_ID}"
     if [ "${DEBUG}" == "1" ]; then
       showMessage "Loaded configuration from ${CONFIG_DIR}/games/${APP_ID}" "d"
@@ -752,9 +758,10 @@ if [ -n "${APP_ID}" ] && [ -n "${GAME_DIR}" ]; then
   turn_off_the_lights
  
   if [ "${COMPAT_TOOL}" -ne 2 ]; then
-    ${steamLinuxRuntime_bin} -- sh -c 'PYTHONHOME="$( dirname "$(echo -n "$( which python3 )" )" )" PYTHONPATH="$( python3 -c "import sys;print('\'':'\''.join(map(str, list(filter(None, sys.path)))))" )" '"${GAME_PARAMS_PRE[*]} ${legendary_bin} launch \"${APP_ID}\" ${language} --no-wine --wrapper \"'${PROTON_BASEDIR}/proton' ${PROTON_RUN}\" ${GAME_PARAMS_SEPARATOR} ${GAME_PARAMS[*]}"
+    # shellcheck disable=SC2016
+    "${steamLinuxRuntime_bin}" -- sh -c 'PYTHONHOME="$( dirname "$(echo -n "$( which python3 )" )" )" PYTHONPATH="$( python3 -c "import sys;print('\'':'\''.join(map(str, list(filter(None, sys.path)))))" )" '"${GAME_PARAMS_PRE[*]} ${legendary_bin} launch \"${APP_ID}\" ${language} --no-wine --wrapper \"'${PROTON_BASEDIR}/proton' ${PROTON_RUN}\" ${GAME_PARAMS_SEPARATOR} ${GAME_PARAMS[*]}"
   else
-    ${steamLinuxRuntime_bin} "${PROTON_BASEDIR}/proton" ${PROTON_RUN} -- $GAME_EXE ${GAME_PARAMS[*]}
+    "${steamLinuxRuntime_bin}" "${PROTON_BASEDIR}/proton" "${PROTON_RUN}" -- "${GAME_EXE}" "${GAME_PARAMS[*]}"
   fi
 
   turn_on_the_lights
