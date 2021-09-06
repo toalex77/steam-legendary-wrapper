@@ -152,6 +152,16 @@ isInSteam() {
   return 1
 }
 
+isSteamRunning() {
+  # Return 0 if Steam is running, otherwise 1
+  if [ "$( $readlink /proc/*/exe | $grep -c "${STEAM_ROOT}/ubuntu12_32/steam" )" -ne 0 ]; then
+    echo -n "0"
+    return 0
+  fi
+  echo -n "1"
+  return 1
+}
+
 required() {
   showMessage "Command \"$1\" is required." "e"
   exit
@@ -571,11 +581,13 @@ export_steam_compat_vars(){
     export PRESSURE_VESSEL_VARIABLE_DIR="${STEAM_LINUX_RUNTIME_BASEDIR}/var"
   fi
   export STEAM_COMPAT_LIBRARY_PATHS="${STEAM_COMPAT_TOOL_PATHS}:${STEAM_COMPAT_INSTALL_PATH}"
-  if [ -z "${SteamGameId}" ]; then
-    export SteamGameId=0
-  fi
-  if [ -z "${SteamOverlayGameId}" ]; then
-    export SteamOverlayGameId=0
+  if [ "$( isSteamRunning )" -eq 0 ]; then
+    if [ -z "${SteamGameId}" ]; then
+      export SteamGameId=0
+    fi
+    if [ -z "${SteamOverlayGameId}" ]; then
+      export SteamOverlayGameId=0
+    fi
   fi
 }
 
