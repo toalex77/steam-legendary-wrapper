@@ -30,5 +30,4 @@ TODO:
     const art_logo = logo ? logo.url : null
     const art_square = gameBoxTall ? gameBoxTall.url : null
     const art_square_front = gameBoxStore ? gameBoxStore.url : null
-  - Find how to set correctly SteamGameId and SteamOverlayGameId variabiles, when not in Steam
   - Update README

@@ -5,10 +5,17 @@
 # - https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/-/merge_requests/134#note_14545
 # - https://github.com/ValveSoftware/steam-for-linux/issues/6310
 
-if [ "$( cat /proc/$PPID/comm )" == "legendary" ]; then
+
+parent="$( cat /proc/$PPID/comm )"
+COMPAT_TOOL=0
+if [ "${parent}" == "legendary" ]; then
   COMPAT_TOOL=2
-else
-  COMPAT_TOOL=0
+elif [ "${parent}" == "reaper" ]; then
+  while IFS= read -r -d $'\0' param; do
+    if [[ "${param}" =~ AppId=([0-9]+) ]]; then
+      AppId="${BASH_REMATCH[1]}"
+    fi
+  done < <(cat /proc/$PPID/cmdline)
 fi
 
 set -m
@@ -354,6 +361,42 @@ set_brightness(){
   fi
 }
 
+get_steam_userid(){
+  if [ -n "${SteamUser}" ] && [ -n "${STEAM_ROOT}" ]; then
+    $grep -A1 -h "\"PersonaName\"[[:space:]]\+\"${SteamUser}\"" "${STEAM_ROOT}"/userdata/*/config/localconfig.vdf | $grep "\"[[:digit:]]\+\"" | $cut -d "\"" -f 2
+  fi
+}
+
+parse_shortcuts_vdf(){
+  local UserID
+  local AppIdHex
+  local AppIdBin
+  UserID="$( get_steam_userid )"
+
+  if [ -n "${UserID}" ] && [ "${parent}" == "reaper" ] && [ -n "${AppId}" ]; then
+    # https://developer.valvesoftware.com/wiki/Add_Non-Steam_Game
+    AppIdHex="$($printf '%x' "${AppId}")"
+    local p=${#AppIdHex}
+    echo "$AppIdHex"
+    while [ "$p" -gt 0 ]; do
+      p=$(( p - 2 ))
+      AppIdBin+="$(echo -n "\x${AppIdHex:$p:2}")"
+    done
+    SHORTCUTS_VDF="${STEAM_ROOT}/userdata/${UserID}/config/shortcuts.vdf"
+    output="$(LC_ALL=C.UTF-8 $python3_bin -c '
+import re
+with open("'"${SHORTCUTS_VDF}"'", mode="rb") as file:
+  fileContent = file.read()
+  match = re.search(rb"(.*?)\x00[0-9]+\x00(.*?)\x02appid\x00'"${AppIdBin}"'\x01appname\x00(.*?)\x00(.*?)\x08",fileContent)
+  if match:
+    if match.group(3) is not None:
+      print(match.group(3).decode())')"
+    if [ -n "${output}" ]; then
+      export GAME_SHORTCUT_TITLE="${output}"
+    fi
+  fi
+}
+
 set_steam_vars(){
   local PROTON_STANDARD_PATHS
   local STEAM_LIBRARY_FOLDER_FILE
@@ -581,6 +624,7 @@ export_steam_compat_vars(){
     export PRESSURE_VESSEL_VARIABLE_DIR="${STEAM_LINUX_RUNTIME_BASEDIR}/var"
   fi
   export STEAM_COMPAT_LIBRARY_PATHS="${STEAM_COMPAT_TOOL_PATHS}:${STEAM_COMPAT_INSTALL_PATH}"
+  
   if [ "$( isSteamRunning )" -eq 0 ]; then
     if [ -z "${SteamGameId}" ]; then
       export SteamGameId=0
@@ -690,6 +734,7 @@ fi
 
 set_commands
 set_steam_vars
+parse_shortcuts_vdf
 
 BRIGHTNESS=10
 
@@ -737,6 +782,7 @@ declare -a GAME_PARAMS_PRE
 PROTON_RUN="waitforexitandrun"
 GAME_NAME=""
 GAME_EXE=""
+GAME_SHORTCUT_TITLE=""
 DESKTOP_EFFECTS_RESUME=0
 LEGENDARY_INSTALLED_GAMES=""
 GAME_PARAMS_SEPARATOR=""
