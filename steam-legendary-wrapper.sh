@@ -561,7 +561,7 @@ export_steam_compat_vars(){
   fi
 
   if [ "$( isInSteam )" -eq 0 ]; then
-    SteamPVSocket="$( $find /tmp -type d -name -name "SteamPVSocket.*" -user ${UID} > /dev/null )"
+    SteamPVSocket="$( $find /tmp -type d -name "SteamPVSocket.*" -user ${UID} 2> /dev/null )"
     if [ -n  "${SteamPVSocket}" ]; then
       export PRESSURE_VESSEL_SOCKET_DIR="${SteamPVSocket}"
     fi
