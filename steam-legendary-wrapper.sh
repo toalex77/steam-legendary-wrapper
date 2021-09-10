@@ -438,7 +438,7 @@ set_steam_vars(){
       if [ -n "$folder" ] && [ -d "$folder/steamapps" ]; then
         STEAM_LIBRARY_FOLDERS+=( "${folder}/steamapps" )
       fi
-    done <<< "$($sed -ne "s/.*\"[[:digit:]]\+\"[[:space:]]\+\"\\([^\"\]\+\)\".*/\1/p" "${STEAM_LIBRARY_FOLDER_FILE}")"
+    done <<< "$($sed -ne "s/.*\"path\"[[:space:]]\+\"\\([^\"\]\+\)\".*/\1/p" "${STEAM_LIBRARY_FOLDER_FILE}")"
   fi
 
   if [ -z "$zenity" ]; then
@@ -503,7 +503,7 @@ steam_linux_runtime_bin_from_version(){
     steamLinuxRuntime_manifest="${STEAM_LINUX_RUNTIME_BASEDIR}/toolmanifest.vdf"
 
     if [ ! -f "${steamLinuxRuntime_manifest}" ]; then
-      showMessage "Missing \"toolmanifest.vdf\" for \"${STEAM_LINUX_RUNTIME}\"" "e"
+      showMessage "Missing \"toolmanifest.vdf\" for \"${STEAM_LINUX_RUNTIME}\" (${steamLinuxRuntime_manifest})" "e"
       exit
     else
       steamLinuxRuntime_commandLine="$( $grep "\"commandline\"[[:space:]]\+\"[^\"]\+\"" "${steamLinuxRuntime_manifest}" | $cut -d "\"" -f 4 | $cut -d " " -f 1)"
