@@ -149,6 +149,71 @@ command_line_parse(){
   fi
 }
 
+write_default_config() {
+  if [ $# -eq 1 ] && [ -n "$1" ]; then
+    if [ ! -f "$1" ]; then
+      $cat << EOF > "$1"
+#
+# This file go in ~/.config/steam-legendary-wrapper
+#
+
+# Disable Desktop effects (at the moment only for GNOME or KDE).
+# Possible values: 0 - do nothing, 1 - disable if enabled, then resume when the game exits.
+# Default: 1 - disable
+#
+# DISABLE_DESKTOP_EFFECTS=1
+
+# Set brightness to 10% on every monitor except the primary. Need this script in your PATH: https://github.com/toalex77/monitor
+# Possibile values: 0 - No, 1 - Yes
+# Default: 1 - Yes
+#
+# TURN_OFF_THE_LIGHTS=1
+
+# Set the brightness level (default 10%) at which dim the monitors, except the primary
+# Possible valuse: 0 ... 100
+# Default: 10
+#
+# BRIGHTNESS = 10
+
+# Define the preferred language to use with legendary binary through the '--language' command line parameter.
+# Use two letter language code.
+# Default: autodetect
+#
+# LANGUAGE=xx
+
+# Full path to legendary executable. Otherwise the script try to find it. Binary version is needed. 
+# Default: autodetect
+#
+# LEGENDARY_BIN=
+
+# If not defined in any other way (game parameter, environment variable, option, ...), specify wich Proton Version to use.
+# Special values are:
+# - "latest stable" or "latest-stable": to use the latest stable version provided by Steam
+# - "experimental": to use the last experimental version of Proton, provided by Steam
+# - "latest GE" or "latest-GE": to use the latest version of Custom Proton GloriousEggroll, that is present under "compatibilitytools.d" Steam folder
+# Default: "latest stable"
+#
+# PROTON_VERSION="latest stable"
+
+# If not defined in any other way (game parameter, environment variable, option, ...), specify wich Steam Linux Runtime Version to use.
+# Default: "Steam Linux Runtime - Soldier"
+#
+# STEAM_LINUX_RUNTIME_VERSION="Steam Linux Runtime - Soldier"
+
+# Here can you put any wanted custom environment variable
+# See https://github.com/ValveSoftware/Proton/#runtime-config-options
+#     https://github.com/GloriousEggroll/proton-ge-custom#modification
+#     https://github.com/doitsujin/dxvk
+
+export DXVK_FRAME_RATE="0"
+if [ "$( isInSteam )" -eq 1 ] && [ "$( isSteamRunning )" -eq 1 ]; then
+  export DXVK_HUD="fps,scale=0.75"
+fi
+EOF
+    fi
+  fi
+}
+
 isInSteam() {
   # Return 0 if is in Steam, otherwise 1
   if [ -n "${SteamAppUser}" ] && [ -n "${SteamAppId}" ]; then
@@ -745,11 +810,16 @@ if [ -d "${HOME}/.config" ]; then
   if [ ! -e "${CONFIG_DIR}" ]; then
     $mkdir "${CONFIG_DIR}"
   fi
-
-  if [ -f "${CONFIG_DIR}/config" ]; then
-    # shellcheck disable=SC1091
-    . "${CONFIG_DIR}/config"
+  if [ ! -e "${CONFIG_DIR}/games" ]; then
+    $mkdir -p "${CONFIG_DIR}/games"
   fi
+
+  if [ ! -f "${CONFIG_DIR}/config" ]; then
+    write_default_config "${CONFIG_DIR}/config"
+  fi
+  # shellcheck disable=SC1091
+  . "${CONFIG_DIR}/config"
+
   if [ -f "${CONFIG_DIR}/games/${APP_ID}" ]; then
     # shellcheck disable=SC1090
     . "${CONFIG_DIR}/games/${APP_ID}"

@@ -1,6 +1,5 @@
 TODO:
   - Add help
-  - Create initial configuration file when missing
   - Install as compatibility tool, if required by user
   - Add more and better code comments (functions, variables, configurations, ...)
   - Add debug code
