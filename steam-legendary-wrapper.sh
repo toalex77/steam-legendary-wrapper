@@ -29,6 +29,7 @@ set_commands(){
   cut="$($which cut 2>/dev/null)" || required "cut"
   dirname="$($which dirname 2>/dev/null)" || required "dirname"
   head="$($which head 2>/dev/null)" || required "head"
+  ln="$($which ln 2>/dev/null)" || required "ln"
   mkdir="$($which mkdir 2>/dev/null)" || required "mkdir"
   printf="$($which printf 2>/dev/null)" || required "printf"
   readlink="$($which readlink 2>/dev/null)" || required "readlink"
@@ -724,6 +725,81 @@ list_runtime_versions(){
   echo "${STEAM_LINUX_RUNTIME_VERSIONS}"
 }
 
+compat_tool_install(){
+  local COMPAT_NAME="Proton-LegendaryWrapper"
+  local COMPAT_DIR="${STEAM_ROOT}/compatibilitytools.d/${COMPAT_NAME}"
+  local COMPAT_VDF="${STEAM_ROOT}/compatibilitytools.d/${COMPAT_NAME}/compatibilitytool.vdf"
+  local MANIFEST_VDF="${STEAM_ROOT}/compatibilitytools.d/${COMPAT_NAME}/toolmanifest.vdf"
+  local EXECUTABLE="${STEAM_ROOT}/compatibilitytools.d/${COMPAT_NAME}/proton"
+  local SELF
+
+  SELF="$($readlink "$0")"
+
+  if [ ! -e "${COMPAT_DIR}" ]; then
+    $mkdir -p "${COMPAT_DIR}"
+  fi
+  if [ -d "${COMPAT_DIR}" ]; then
+    if [ ! -e "${COMPAT_VDF}" ]; then
+      $cat << EOF > "${COMPAT_VDF}"
+"compatibilitytools"
+{
+  "compat_tools"
+  {
+        "proton_legendary_wrapper" // Internal name of this tool
+        {
+          "install_path" "."
+          "display_name" "Proton - Legendary Wrapper"
+
+          "from_oslist"  "windows"
+          "to_oslist"    "linux"
+        }
+  }
+}
+EOF
+      status="$?"
+      if [ "${status}" -eq 0 ]; then
+        showMessage "File \"${COMPAT_VDF}\" was written succesfully." "i"
+      else
+        showMessage "An error occurred while writing file \"${COMPAT_VDF}\"." "e"
+      fi
+    else
+      showMessage "\"${COMPAT_VDF}\" already exists." "w"
+    fi
+    if [ ! -e "${MANIFEST_VDF}" ]; then
+      $cat << EOF > "${MANIFEST_VDF}"
+"manifest"
+{
+  "commandline" "/proton compat%verb%"
+  "use_sessions" "1"
+  "version" "2"
+  "use_tool_subprocess_reaper" "1"
+}
+EOF
+      status="$?"
+      if [ "${status}" -eq 0 ]; then
+        showMessage "File \"${MANIFEST_VDF}\" was written succesfully." "i"
+      else
+        showMessage "An error occurred while writing file \"${MANIFEST_VDF}\"." "e"
+      fi
+    else
+      showMessage "\"${MANIFEST_VDF}\" already exists." "w"
+    fi
+    if [ ! -e "${EXECUTABLE}" ]; then
+      $ln -s "${SELF}" "${EXECUTABLE}"
+      status="$?"
+      if [ "${status}" -eq 0 ]; then
+        showMessage "Symbolic link \"${EXECUTABLE}\" to \"${SELF}\" was created succesfully." "i"
+      else
+        showMessage "An error occurred while creating symbolic link \"${EXECUTABLE}\"." "w"
+      fi
+    else
+      showMessage "\"${EXECUTABLE}\" already exists." "w"
+    fi
+  else
+    showMessage "\"${COMPAT_DIR}\" is not a directory." "e"
+  fi
+}
+
 pause_desktop_effects(){
   if [ -z "${DISABLE_DESKTOP_EFFECTS}" ] || [ "${DISABLE_DESKTOP_EFFECTS}" == "1" ]; then
     case "${XDG_SESSION_DESKTOP}" in
@@ -839,6 +915,10 @@ if [ "$#" -eq 1 ]; then
     "list-runtime-versions")
       set_steam_linux_runtime_version
       list_runtime_versions
+    exit
+    ;;
+    "compat-tool-install")
+      compat_tool_install
     exit
     ;;
     *)
