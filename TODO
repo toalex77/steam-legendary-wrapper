@@ -1,5 +1,4 @@
 TODO:
-  - Update README
   - Add more and better code comments (functions, variables, configurations, ...)
   - Add debug code
   - Find a way to grab game artworks and put ~/.local/share/Steam/userdata/USER_ID/config/grid/
