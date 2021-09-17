@@ -863,7 +863,10 @@ resume_desktop_effects(){
 
 show_help() {
   $cat << EOF
-Usage: $($basename $0) [list-proton-versions|list-runtime-versions|compat-tool-install]
+Usage: $($basename $0) [help|--help|list-proton-versions|list-runtime-versions|compat-tool-install]
+
+  $($basename $0) help|--help
+    Show this help
 
   $($basename $0) list-proton-versions
     Lists all found versions of Proton
@@ -939,7 +942,7 @@ if [ "$#" -eq 1 ]; then
       compat_tool_install
     exit
     ;;
-    *)
+    "help"|"--help")
       show_help
       exit
     ;;
