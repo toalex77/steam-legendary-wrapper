@@ -1,9 +1,12 @@
 TODO:
-  - Add help
+  - Update README
   - Add more and better code comments (functions, variables, configurations, ...)
   - Add debug code
   - Find a way to grab game artworks and put ~/.local/share/Steam/userdata/USER_ID/config/grid/
-    ~/.config/legendary/APP_ID.json
+    ~/.config/legendary/metadata/APP_ID.json
+    #cat ~/.config/legendary/metadata/APP_ID.json | python3 -c 'import sys, json;
+    #for i in json.load(sys.stdin)["metadata"]["keyImages"]:
+    #  print(i["type"]+": "+i["url"])'
     From "HeroicGamesLauncher/electron/legendary/library.ts" (line 342 to 364)
     const gameBox = is_game ?
       keyImages.filter(({ type }: KeyImage) => type === 'DieselGameBox')[0] :
@@ -28,4 +31,3 @@ TODO:
     const art_logo = logo ? logo.url : null
     const art_square = gameBoxTall ? gameBoxTall.url : null
     const art_square_front = gameBoxStore ? gameBoxStore.url : null
-  - Update README

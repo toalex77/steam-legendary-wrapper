@@ -443,7 +443,6 @@ parse_shortcuts_vdf(){
     # https://developer.valvesoftware.com/wiki/Add_Non-Steam_Game
     AppIdHex="$($printf '%x' "${AppId}")"
     local p=${#AppIdHex}
-    echo "$AppIdHex"
     while [ "$p" -gt 0 ]; do
       p=$(( p - 2 ))
       AppIdBin+="$(echo -n "\x${AppIdHex:$p:2}")"
@@ -862,6 +861,25 @@ resume_desktop_effects(){
   fi
 }
 
+show_help() {
+  $cat << EOF
+Usage: $($basename $0) [list-proton-versions|list-runtime-versions|compat-tool-install]
+
+  $($basename $0) list-proton-versions
+    Lists all found versions of Proton
+
+  $($basename $0) list-runtime-versions
+    Lists all available versions of the Steam Linux Runtime
+
+  $($basename $0) compat-tool-install
+    Install this wrapper as a compatibility tool for Steam Client
+
+  $($basename $0) GAME-NAME [Proton-Version] [Steam-Runtime-Version] [-- game-arguments]
+    Run "GAME-NAME" optionally with the preferred "Proton-Version" and the preferred "Steam-Runtime-Version". Game arguments can be specified after "--"
+
+EOF
+}
+
 failure() {
   local lineno="$1"
   local msg="$2"
@@ -922,6 +940,8 @@ if [ "$#" -eq 1 ]; then
     exit
     ;;
     *)
+      show_help
+      exit
     ;;
   esac
 fi
@@ -974,4 +994,6 @@ if [ -n "${APP_ID}" ] && [ -n "${GAME_DIR}" ]; then
 
   turn_on_the_lights
   resume_desktop_effects
+else
+  show_help
 fi
