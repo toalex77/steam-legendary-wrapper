@@ -91,6 +91,8 @@ command_line_parse(){
       PROTON_VER="${p#"PROTON_VER="}"
     elif [[ $p =~ ^STEAM_LINUX_RUNTIME=.* ]]; then
       STEAM_LINUX_RUNTIME="${p#"STEAM_LINUX_RUNTIME="}"
+    elif [[ $p =~ ^COMPAT_GAME_ID=.* ]]; then
+      COMPAT_GAME_ID="${p#"COMPAT_GAME_ID="}"
     else
       CMDLINE_PARAMS+=( "$p" )
     fi
@@ -690,12 +692,17 @@ export_steam_compat_vars(){
   fi
   export STEAM_COMPAT_LIBRARY_PATHS="${STEAM_COMPAT_TOOL_PATHS}:${STEAM_COMPAT_INSTALL_PATH}"
   
-  if [ "$( isSteamRunning )" -eq 0 ]; then
-    if [ -z "${SteamGameId}" ]; then
-      export SteamGameId=0
-    fi
-    if [ -z "${SteamOverlayGameId}" ]; then
-      export SteamOverlayGameId=0
+  if [ -n "${COMPAT_GAME_ID}" ]; then
+    export SteamGameId="${COMPAT_GAME_ID}"
+    export SteamOverlayGameId="${COMPAT_GAME_ID}"
+  else
+    if [ "$( isSteamRunning )" -eq 0 ]; then
+      if [ -z "${SteamGameId}" ]; then
+        export SteamGameId=0
+      fi
+      if [ -z "${SteamOverlayGameId}" ]; then
+        export SteamOverlayGameId=0
+      fi
     fi
   fi
 }
@@ -863,21 +870,21 @@ resume_desktop_effects(){
 
 show_help() {
   $cat << EOF
-Usage: $($basename $0) [help|--help|list-proton-versions|list-runtime-versions|compat-tool-install]
+Usage: $($basename "$0") [help|--help|list-proton-versions|list-runtime-versions|compat-tool-install]
 
-  $($basename $0) help|--help
+  $($basename "$0") help|--help
     Show this help
 
-  $($basename $0) list-proton-versions
+  $($basename "$0") list-proton-versions
     Lists all found versions of Proton
 
-  $($basename $0) list-runtime-versions
+  $($basename "$0") list-runtime-versions
     Lists all available versions of the Steam Linux Runtime
 
-  $($basename $0) compat-tool-install
+  $($basename "$0") compat-tool-install
     Install this wrapper as a compatibility tool for Steam Client
 
-  $($basename $0) GAME-NAME [Proton-Version] [Steam-Runtime-Version] [-- game-arguments]
+  $($basename "$0") GAME-NAME [Proton-Version] [Steam-Runtime-Version] [-- game-arguments]
     Run "GAME-NAME" optionally with the preferred "Proton-Version" and the preferred "Steam-Runtime-Version". Game arguments can be specified after "--"
 
 EOF
@@ -987,7 +994,7 @@ if [ -n "${APP_ID}" ] && [ -n "${GAME_DIR}" ]; then
 
   pause_desktop_effects
   turn_off_the_lights
- 
+  
   if [ "${COMPAT_TOOL}" -ne 2 ]; then
     # shellcheck disable=SC2016
     "${steamLinuxRuntime_bin}" -- sh -c 'PYTHONHOME="$( dirname "$(echo -n "$( which python3 )" )" )" PYTHONPATH="$( python3 -c "import sys;print('\'':'\''.join(map(str, list(filter(None, sys.path)))))" )" '"${GAME_PARAMS_PRE[*]} ${legendary_bin} launch \"${APP_ID}\" ${language} --no-wine --wrapper \"'${PROTON_BASEDIR}/proton' ${PROTON_RUN}\" ${GAME_PARAMS_SEPARATOR} ${GAME_PARAMS[*]}"
