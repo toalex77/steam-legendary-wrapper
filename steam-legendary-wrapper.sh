@@ -503,7 +503,9 @@ set_steam_vars(){
   if [ -f "${STEAM_LIBRARY_FOLDER_FILE}" ]; then
     while read -r folder; do
       if [ -n "$folder" ] && [ -d "$folder/steamapps" ]; then
-        STEAM_LIBRARY_FOLDERS+=( "${folder}/steamapps" )
+        if [[ ! " ${STEAM_LIBRARY_FOLDERS[*]} " =~ " ${folder}/steamapps " ]]; then
+          STEAM_LIBRARY_FOLDERS+=( "${folder}/steamapps" )
+        fi
       fi
     done <<< "$($sed -ne "s/.*\"path\"[[:space:]]\+\"\\([^\"\]\+\)\".*/\1/p" "${STEAM_LIBRARY_FOLDER_FILE}")"
   fi
